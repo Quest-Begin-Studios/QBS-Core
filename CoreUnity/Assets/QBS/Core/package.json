@@ -1,0 +1,17 @@
+﻿{
+  "name": "com.qbs.core",
+  "version": "1.0.0",
+  "displayName": "QBS Core",
+  "description": "Base package for all QBS components",
+  "unity": "6000.0",
+  "documentationUrl": "https://example.com/",
+  "changelogUrl": "https://example.com/changelog.html",
+  "licensesUrl": "https://example.com/licensing.html",
+  "keywords": [
+    "utility"
+  ],
+  "author": {
+    "name": "QBS",
+    "email": "questbeginstudios@gmail.com"
+  }
+}
