@@ -285,7 +285,7 @@ namespace QBS.Core.Editor
 		private void SetMinimumLevel(LogLevel level)
 		{
 			Log.MinimumLevel = level;
-			EditorPrefs.SetInt("QBS_Log_MinimumLevel", (int)level);
+			EditorPrefs.SetInt(LogEditorPrefs.MinimumLevel, (int)level);
 			Debug.Log($"[QBS] Minimum log level set to: {level}");
 		}
 
@@ -305,14 +305,14 @@ namespace QBS.Core.Editor
 			{
 				_channelStates[i] = true;
 				Log.SetChannelEnabled(_channels[i], true);
-				var key = $"QBS_Log_Channel_{_channels[i]}";
+				var key = LogEditorPrefs.GetChannelKey(_channels[i]);
 				EditorPrefs.DeleteKey(key);
 			}
 		}
 
 		private void SaveChannelState(LogChannel channel, bool enabled)
 		{
-			var key = $"QBS_Log_Channel_{channel}";
+			var key = LogEditorPrefs.GetChannelKey(channel);
 			EditorPrefs.SetBool(key, enabled);
 		}
 	}
