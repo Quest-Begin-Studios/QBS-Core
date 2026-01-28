@@ -1,5 +1,6 @@
 using System;
 using UnityEditor;
+using UnityEngine;
 
 namespace QBS.Core.Editor
 {
@@ -30,6 +31,11 @@ namespace QBS.Core.Editor
 					var enabled = EditorPrefs.GetBool(key);
 					Log.SetChannelEnabled(channel, enabled);
 				}
+			}
+
+			if (!LogConfigWindow.AreLogsEnabled())
+			{
+				Debug.LogError("QBS Logging is disabled. Please enable it in the Log Configuration window. \n Tools -> QBS -> Logging -> Configure Logging ");
 			}
 		}
 	}

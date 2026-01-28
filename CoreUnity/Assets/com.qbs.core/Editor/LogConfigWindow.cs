@@ -38,7 +38,7 @@ namespace QBS.Core.Editor
 			}
 
 			_minimumLevel = Log.MinimumLevel;
-			_logsEnabled = IsLogsEnabled();
+			_logsEnabled = AreLogsEnabled();
 		}
 
 		private void InitializeStyles()
@@ -274,7 +274,7 @@ namespace QBS.Core.Editor
 			Debug.Log($"[QBS] Logging {(_logsEnabled ? "enabled" : "disabled")}");
 		}
 
-		private bool IsLogsEnabled()
+		public static bool AreLogsEnabled()
 		{
 			var buildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
 			var namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(buildTargetGroup);
