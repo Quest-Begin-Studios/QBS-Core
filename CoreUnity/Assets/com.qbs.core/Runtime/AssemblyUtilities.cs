@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEditor.Callbacks;
 
 namespace QBS.Core
 {
@@ -25,25 +26,22 @@ namespace QBS.Core
 	///     <see href="https://docs.unity3d.com/2023.3/Documentation/Manual/ScriptCompileOrderFolders.html">
 	///         visit Unity
 	///         Documentation
-	///     </see>	
+	///     </see>
 	/// </summary>
 	public static class AssemblyUtilities
 	{
 		private static Dictionary<UnityAssemblyType, Assembly> _assemblyMap;
-		
+
+
 #if UNITY_EDITOR
-		
+
 		/// <summary>
-		/// Invalidate cache of assemblies on script reload
+		///     Invalidate cache of assemblies on script reload
 		/// </summary>
-		[UnityEditor.Callbacks.DidReloadScripts]
-		private static void OnAssemblyReloaded()
-		{
-			_assemblyMap = null;
-		}
-		
+		[DidReloadScripts]
+		private static void OnAssemblyReloaded() => _assemblyMap = null;
+
 #endif
-		
 
 		/// <summary>
 		///     Maps the assembly name to the corresponding AssemblyType.

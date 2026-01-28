@@ -1,0 +1,76 @@
+﻿using System;
+using System.Diagnostics;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace QBS.Core
+{
+	public partial class Log
+	{
+		public static LogBuilder WithChannel(LogChannel channel) => new LogBuilder { Channel = channel };
+		public static LogBuilder WithTag(string tag) => new LogBuilder { Tag = tag };
+		public static LogBuilder WithColor(Color color) => new LogBuilder { Color = color };
+		public static LogBuilder WithContext(Object context) => new LogBuilder { Context = context };
+		
+		public class LogBuilder
+		{
+			internal LogChannel Channel { get; set; } = LogChannel.Default;
+			internal string Tag { get; set; }
+			internal Color Color { get; set; }
+			internal Object Context { get; set; }
+
+			public LogBuilder WithChannel(LogChannel channel)
+			{
+				Channel = channel;
+				return this;
+			}
+
+			public LogBuilder WithTag(string tag)
+			{
+				Tag = tag;
+				return this;
+			}
+
+			public LogBuilder WithColor(Color color)
+			{
+				Color = color;
+				return this;
+			}
+
+			public LogBuilder WithContext(Object context)
+			{
+				Context = context;
+				return this;
+			}
+
+			[Conditional("ENABLE_LOGS")]
+			public void Trace(string message) => Log.Trace(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Debug(string message) => Log.Debug(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Info(string message) => Log.Info(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void InfoSnipe(string message) => Log.InfoSnipe(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Warning(string message) => Log.Warning(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Error(string message) => Log.Error(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Error(string message, Exception exception) => 
+				Log.Error(message, exception, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Fatal(string message) => Log.Fatal(message, Tag, Color, Channel, Context);
+
+			[Conditional("ENABLE_LOGS")]
+			public void Fatal(string message, Exception exception) => 
+				Log.Fatal(message, exception, Tag, Color, Channel, Context);
+		}
+	}
+}
