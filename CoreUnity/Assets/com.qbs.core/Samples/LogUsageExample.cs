@@ -23,8 +23,7 @@ namespace QBS.Examples
 
 		private void ChannelLogging()
 		{
-			Log.WithChannel(LogChannel.Network).Info("Connected to server");
-			Log.WithChannel(LogChannel.Physics).Warning("Collision detected");
+			Log.WithChannel(LogChannel.None).Info("Connected to server");
 		}
 
 		private void TaggedLogging()
@@ -42,7 +41,7 @@ namespace QBS.Examples
 		}
 
 		private void FluentAPIExample() => Log.WithContext(this)
-			.WithChannel(LogChannel.Save)
+			.WithChannel(LogChannel.None)
 			.WithTag("Critical")
 			.Error("Player died");
 
@@ -50,7 +49,7 @@ namespace QBS.Examples
 		{
 			Log.MinimumLevel = LogLevel.Warning;
 
-			Log.SetChannelEnabled(LogChannel.Network, false);
+			Log.SetChannelEnabled(LogChannel.None, false);
 		}
 	}
 }

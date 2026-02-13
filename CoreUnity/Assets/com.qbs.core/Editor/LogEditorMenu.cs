@@ -16,9 +16,9 @@ namespace QBS.Core.Editor
 		private static void InitializeLogSettings()
 		{
 			RestoreMinimumLogLevel();
-			RestoreActiveLogChannels();
+			// RestoreActiveLogChannels();
 			WarnUserAboutInactiveLogs();
-			
+
 			EditorApplication.quitting -= OnQuit;
 			EditorApplication.quitting += OnQuit;
 		}
@@ -26,14 +26,14 @@ namespace QBS.Core.Editor
 		private static void WarnUserAboutInactiveLogs()
 		{
 
-			if (!LogConfigWindow.AreLogsEnabled() && !EditorPrefs.GetBool(LogEditorPrefs.LogsDisabledWarningShown, false))
+			if (!LogConfigWindow.AreLogsEnabled() && !EditorPrefs.GetBool(LogEditorConstants.LogsDisabledWarningShown, false))
 			{
 				Debug.LogError(
 					"QBS Logging is disabled. Enable it in the "
 					+ "Log Configuration window to utilize the logging utility."
 					+ " \nTools -> QBS -> Logging -> Configure Logging ");
-				
-				EditorPrefs.SetBool(LogEditorPrefs.LogsDisabledWarningShown, true);
+
+				EditorPrefs.SetBool(LogEditorConstants.LogsDisabledWarningShown, true);
 			}
 		}
 
@@ -43,7 +43,7 @@ namespace QBS.Core.Editor
 			for (var i = 0; i < channelCount; i++)
 			{
 				var channel = (LogChannel)i;
-				var key = LogEditorPrefs.GetChannelKey(channel);
+				var key = LogEditorConstants.GetChannelKey(channel);
 				if (EditorPrefs.HasKey(key))
 				{
 					var enabled = EditorPrefs.GetBool(key);
@@ -54,16 +54,13 @@ namespace QBS.Core.Editor
 
 		private static void RestoreMinimumLogLevel()
 		{
-			if (EditorPrefs.HasKey(LogEditorPrefs.MinimumLevel))
+			if (EditorPrefs.HasKey(LogEditorConstants.MinimumLevel))
 			{
-				var level = (LogLevel)EditorPrefs.GetInt(LogEditorPrefs.MinimumLevel);
+				var level = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel);
 				Log.MinimumLevel = level;
 			}
 		}
 
-		private static void OnQuit()
-		{
-			EditorPrefs.SetBool(LogEditorPrefs.LogsDisabledWarningShown, false);
-		}
+		private static void OnQuit() => EditorPrefs.SetBool(LogEditorConstants.LogsDisabledWarningShown, false);
 	}
 }

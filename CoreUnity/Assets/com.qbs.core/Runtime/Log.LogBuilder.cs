@@ -14,7 +14,7 @@ namespace QBS.Core
 		
 		public class LogBuilder
 		{
-			internal LogChannel Channel { get; set; } = LogChannel.Default;
+			internal LogChannel Channel { get; set; } = LogChannel.None;
 			internal string Tag { get; set; }
 			internal Color Color { get; set; }
 			internal Object Context { get; set; }

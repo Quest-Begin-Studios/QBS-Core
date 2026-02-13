@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using UnityEditor;
 using UnityEditor.Build;
@@ -9,8 +8,6 @@ namespace QBS.Core.Editor
 	public class LogConfigWindow : EditorWindow
 	{
 		private Vector2 _scrollPosition;
-		private bool[] _channelStates;
-		private LogChannel[] _channels;
 		private bool _logsEnabled;
 		private LogLevel _minimumLevel;
 
@@ -29,13 +26,12 @@ namespace QBS.Core.Editor
 
 		private void OnEnable()
 		{
-			_channels = (LogChannel[])Enum.GetValues(typeof(LogChannel));
-			_channelStates = new bool[_channels.Length];
+			// TODO: Read from LogChannelDefines 
 
-			for (var i = 0; i < _channels.Length; i++)
-			{
-				_channelStates[i] = Log.IsChannelEnabled(_channels[i]);
-			}
+			// for (var i = 0; i < _channels.Length; i++)
+			// {
+			// 	_channelStates[i] = Log.IsChannelEnabled(_channels[i]);
+			// }
 
 			_minimumLevel = Log.MinimumLevel;
 			_logsEnabled = AreLogsEnabled();
@@ -50,7 +46,7 @@ namespace QBS.Core.Editor
 					fontSize = 18,
 					fontStyle = FontStyle.Bold,
 					alignment = TextAnchor.MiddleCenter,
-					margin = new RectOffset(0, 0, 10, 10)
+					margin = new RectOffset(0, 0, 10, 10),
 				};
 			}
 
@@ -59,7 +55,7 @@ namespace QBS.Core.Editor
 				_sectionStyle = new GUIStyle(EditorStyles.boldLabel)
 				{
 					fontSize = 13,
-					margin = new RectOffset(5, 0, 5, 5)
+					margin = new RectOffset(5, 0, 5, 5),
 				};
 			}
 
@@ -68,7 +64,7 @@ namespace QBS.Core.Editor
 				_boxStyle = new GUIStyle(GUI.skin.box)
 				{
 					padding = new RectOffset(10, 10, 10, 10),
-					margin = new RectOffset(5, 5, 5, 5)
+					margin = new RectOffset(5, 5, 5, 5),
 				};
 			}
 		}
@@ -99,60 +95,63 @@ namespace QBS.Core.Editor
 		private void DrawEnableLogsSection()
 		{
 			EditorGUILayout.BeginVertical(_boxStyle);
-		
+
 			EditorGUILayout.LabelField("⚙ Enable Logs", _sectionStyle);
 			EditorGUILayout.Space(3);
-		
+
 			EditorGUILayout.HelpBox("Toggle the ENABLE_LOGS scripting define symbol. Logs are compiled out when disabled.",
 				MessageType.Info);
 
 			EditorGUILayout.Space(5);
 			EditorGUILayout.BeginHorizontal();
 			GUILayout.FlexibleSpace();
-		
+
 			var toggleColor = _logsEnabled ? new Color(0.3f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.3f);
 			var originalColor = GUI.backgroundColor;
 			GUI.backgroundColor = toggleColor;
-		
-			var newLogsEnabled = GUILayout.Toggle(_logsEnabled, _logsEnabled ? "✓ Enabled" : "✗ Disabled", 
-				GUI.skin.button, GUILayout.Width(120), GUILayout.Height(30));
-		
+
+			var newLogsEnabled = GUILayout.Toggle(_logsEnabled,
+				_logsEnabled ? "✓ Enabled" : "✗ Disabled",
+				GUI.skin.button,
+				GUILayout.Width(120),
+				GUILayout.Height(30));
+
 			GUI.backgroundColor = originalColor;
-		
+
 			if (newLogsEnabled != _logsEnabled)
 			{
 				_logsEnabled = newLogsEnabled;
 				ToggleEnableLogs();
 			}
-		
+
 			GUILayout.FlexibleSpace();
 			EditorGUILayout.EndHorizontal();
 			EditorGUILayout.Space(5);
-		
+
 			EditorGUILayout.EndVertical();
 		}
 
 		private void DrawMinimumLevelSection()
 		{
 			EditorGUILayout.BeginVertical(_boxStyle);
-		
+
 			EditorGUILayout.LabelField("📊 Minimum Log Level", _sectionStyle);
 			EditorGUILayout.Space(3);
-		
+
 			EditorGUILayout.HelpBox("Only logs at or above this level will be displayed.", MessageType.Info);
 
 			EditorGUILayout.Space(5);
 			EditorGUILayout.BeginHorizontal();
 			EditorGUILayout.LabelField("Current Level:", GUILayout.Width(100));
-		
+
 			var levelColor = GetLevelColor(_minimumLevel);
 			var originalColor = GUI.backgroundColor;
 			GUI.backgroundColor = levelColor;
-		
+
 			var newLevel = (LogLevel)EditorGUILayout.EnumPopup(_minimumLevel, GUILayout.Height(25));
-		
+
 			GUI.backgroundColor = originalColor;
-		
+
 			if (newLevel != _minimumLevel)
 			{
 				_minimumLevel = newLevel;
@@ -160,17 +159,17 @@ namespace QBS.Core.Editor
 			}
 			EditorGUILayout.EndHorizontal();
 			EditorGUILayout.Space(5);
-		
+
 			EditorGUILayout.EndVertical();
 		}
 
 		private void DrawChannelsSection()
 		{
 			EditorGUILayout.BeginVertical(_boxStyle);
-		
+
 			EditorGUILayout.LabelField("📡 Log Channels", _sectionStyle);
 			EditorGUILayout.Space(3);
-		
+
 			EditorGUILayout.HelpBox("Enable or disable specific log channels. Disabled channels will not output logs.",
 				MessageType.Info);
 
@@ -194,61 +193,61 @@ namespace QBS.Core.Editor
 
 			var scrollViewStyle = new GUIStyle(GUI.skin.scrollView)
 			{
-				padding = new RectOffset(5, 5, 5, 5)
+				padding = new RectOffset(5, 5, 5, 5),
 			};
-		
+
 			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition, scrollViewStyle, GUILayout.Height(220));
 
 			var enabledCount = 0;
-			for (var i = 0; i < _channels.Length; i++)
-			{
-				var channel = _channels[i];
-				var isEnabled = _channelStates[i];
-			
-				if (isEnabled) enabledCount++;
-			
-				EditorGUILayout.BeginHorizontal();
-			
-				var channelColor = isEnabled ? Color.white : new Color(0.7f, 0.7f, 0.7f);
-				var originalColor = GUI.contentColor;
-				GUI.contentColor = channelColor;
-			
-				var icon = isEnabled ? "✓" : "○";
-				var newState = EditorGUILayout.ToggleLeft($"{icon} {channel}", isEnabled);
-			
-				GUI.contentColor = originalColor;
-
-				if (newState != isEnabled)
-				{
-					_channelStates[i] = newState;
-					Log.SetChannelEnabled(channel, newState);
-					SaveChannelState(channel, newState);
-				}
-			
-				EditorGUILayout.EndHorizontal();
-			}
+			// for (var i = 0; i < _channels.Length; i++)
+			// {
+			// 	var channel = _channels[i];
+			// 	var isEnabled = _channelStates[i];
+			//
+			// 	if (isEnabled)
+			// 	{
+			// 		enabledCount++;
+			// 	}
+			//
+			// 	EditorGUILayout.BeginHorizontal();
+			//
+			// 	var channelColor = isEnabled ? Color.white : new Color(0.7f, 0.7f, 0.7f);
+			// 	var originalColor = GUI.contentColor;
+			// 	GUI.contentColor = channelColor;
+			//
+			// 	var icon = isEnabled ? "✓" : "○";
+			// 	var newState = EditorGUILayout.ToggleLeft($"{icon} {channel}", isEnabled);
+			//
+			// 	GUI.contentColor = originalColor;
+			//
+			// 	if (newState != isEnabled)
+			// 	{
+			// 		_channelStates[i] = newState;
+			// 		Log.SetChannelEnabled(channel, newState);
+			// 		SaveChannelState(channel, newState);
+			// 	}
+			//
+			// 	EditorGUILayout.EndHorizontal();
+			// }
 
 			EditorGUILayout.EndScrollView();
-		
+
 			EditorGUILayout.Space(5);
-			EditorGUILayout.LabelField($"Active Channels: {enabledCount}/{_channels.Length}", EditorStyles.miniLabel);
-		
+			//EditorGUILayout.LabelField($"Active Channels: {enabledCount}/{_channels.Length}", EditorStyles.miniLabel);
+
 			EditorGUILayout.EndVertical();
 		}
 
-		private Color GetLevelColor(LogLevel level)
+		private Color GetLevelColor(LogLevel level) => level switch
 		{
-			return level switch
-			{
-				LogLevel.Trace => new Color(0.7f, 0.7f, 0.7f),
-				LogLevel.Debug => new Color(0.6f, 0.8f, 1f),
-				LogLevel.Info => new Color(0.6f, 1f, 0.6f),
-				LogLevel.Warning => new Color(1f, 0.9f, 0.4f),
-				LogLevel.Error => new Color(1f, 0.5f, 0.4f),
-				LogLevel.Fatal => new Color(1f, 0.3f, 0.3f),
-				_ => Color.white
-			};
-		}
+			LogLevel.Trace => new Color(0.7f, 0.7f, 0.7f),
+			LogLevel.Debug => new Color(0.6f, 0.8f, 1f),
+			LogLevel.Info => new Color(0.6f, 1f, 0.6f),
+			LogLevel.Warning => new Color(1f, 0.9f, 0.4f),
+			LogLevel.Error => new Color(1f, 0.5f, 0.4f),
+			LogLevel.Fatal => new Color(1f, 0.3f, 0.3f),
+			_ => Color.white,
+		};
 
 		private void ToggleEnableLogs()
 		{
@@ -285,34 +284,34 @@ namespace QBS.Core.Editor
 		private void SetMinimumLevel(LogLevel level)
 		{
 			Log.MinimumLevel = level;
-			EditorPrefs.SetInt(LogEditorPrefs.MinimumLevel, (int)level);
+			EditorPrefs.SetInt(LogEditorConstants.MinimumLevel, (int)level);
 			Debug.Log($"[QBS] Minimum log level set to: {level}");
 		}
 
 		private void EnableAllChannels(bool enabled)
 		{
-			for (var i = 0; i < _channels.Length; i++)
-			{
-				_channelStates[i] = enabled;
-				Log.SetChannelEnabled(_channels[i], enabled);
-				SaveChannelState(_channels[i], enabled);
-			}
+			// for (var i = 0; i < _channels.Length; i++)
+			// {
+			// 	_channelStates[i] = enabled;
+			// 	Log.SetChannelEnabled(_channels[i], enabled);
+			// 	SaveChannelState(_channels[i], enabled);
+			// }
 		}
 
 		private void ResetToDefaults()
 		{
-			for (var i = 0; i < _channels.Length; i++)
-			{
-				_channelStates[i] = true;
-				Log.SetChannelEnabled(_channels[i], true);
-				var key = LogEditorPrefs.GetChannelKey(_channels[i]);
-				EditorPrefs.DeleteKey(key);
-			}
+			// for (var i = 0; i < _channels.Length; i++)
+			// {
+			// 	_channelStates[i] = true;
+			// 	Log.SetChannelEnabled(_channels[i], true);
+			// 	var key = LogEditorConstants.GetChannelKey(_channels[i]);
+			// 	EditorPrefs.DeleteKey(key);
+			// }
 		}
 
 		private void SaveChannelState(LogChannel channel, bool enabled)
 		{
-			var key = LogEditorPrefs.GetChannelKey(channel);
+			var key = LogEditorConstants.GetChannelKey(channel);
 			EditorPrefs.SetBool(key, enabled);
 		}
 	}

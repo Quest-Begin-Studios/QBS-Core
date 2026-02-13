@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using UnityEngine;
@@ -15,24 +14,6 @@ namespace QBS.Core
 		Warning,
 		Error,
 		Fatal,
-	}
-
-	public enum LogChannel
-	{
-		Default,
-		Network,
-		AI,
-		Physics,
-		Setup,
-		UI,
-		Audio,
-		Animation,
-		Input,
-		Gameplay,
-		Inventory,
-		Save,
-		Loading,
-		Performance,
 	}
 
 	public static partial class Log
@@ -64,60 +45,67 @@ namespace QBS.Core
 
 		//Create editor util for setting this
 		public static LogLevel MinimumLevel { get; set; } = LogLevel.Trace;
-		private static readonly Dictionary<LogChannel, bool> ChannelFilters = new();
+		public static LogChannel EnabledChannels { get; private set; }
 
 		//Create editor util for setting this
-		public static void SetChannelEnabled(LogChannel channel, bool enabled) => ChannelFilters[channel] = enabled;
+		public static void SetChannelEnabled(LogChannel channel, bool enabled)
+		{
+			if (enabled)
+			{
+				EnabledChannels |= channel;
+			}
+			else
+			{
+				EnabledChannels &= ~channel;
+			}
+		}
 
-		public static bool IsChannelEnabled(LogChannel channel) =>
-			!ChannelFilters.TryGetValue(channel, out var enabled) || enabled;
-
-		private static bool IsLevelEnabled(LogLevel level) => level >= MinimumLevel;
+		public static bool IsChannelEnabled(LogChannel channel) => (EnabledChannels & channel) != 0;
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Trace(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage(message, tag, color, LogLevel.Trace, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Debug(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage(message, tag, color, LogLevel.Debug, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Info(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage(message, tag, color, LogLevel.Info, channel, context);
 		
 		// String allocation
 		[Conditional("ENABLE_LOGS")]
 		public static void InfoSnipe(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage($"( -_•)▄︻デ══━一 {message}", tag, color, LogLevel.Info, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Warning(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage(message, tag, color, LogLevel.Warning, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Error(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage(message, tag, color, LogLevel.Error, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Error(string message, Exception exception, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessageWithException(message, exception, tag, color, LogLevel.Error, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Fatal(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessage(message, tag, color, LogLevel.Fatal, channel, context);
 
 		[Conditional("ENABLE_LOGS")]
 		public static void Fatal(string message, Exception exception, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.Default, Object context = null) =>
+			LogChannel channel = LogChannel.None, Object context = null) =>
 			LogMessageWithException(message, exception, tag, color, LogLevel.Fatal, channel, context);
 
 		private static void LogMessage(string message, string tag, Color color,
@@ -128,7 +116,7 @@ namespace QBS.Core
 				return;
 			}
 
-			if (!IsChannelEnabled(channel) && channel != LogChannel.Default)
+			if (!IsChannelEnabled(channel) && channel != LogChannel.None)
 			{
 				return;
 			}
@@ -139,7 +127,7 @@ namespace QBS.Core
 			Builder.AppendFormat(BracketsFormat, levelStr);
 
 			// Append channel if specified.
-			if (channel != LogChannel.Default)
+			if (channel != LogChannel.None)
 			{
 				var channelStr = channel.ToString();
 				Builder.AppendFormat(BracketsFormat, channelStr);
@@ -184,7 +172,7 @@ namespace QBS.Core
 				return;
 			}
 
-			if (!IsChannelEnabled(channel) && channel != LogChannel.Default)
+			if (!IsChannelEnabled(channel) && channel != LogChannel.None)
 			{
 				return;
 			}
@@ -195,7 +183,7 @@ namespace QBS.Core
 			Builder.AppendFormat(BracketsFormat, levelStr);
 
 			// Append channel if specified.
-			if (channel != LogChannel.Default)
+			if (channel != LogChannel.None)
 			{
 				var channelStr = channel.ToString();
 				Builder.AppendFormat(BracketsFormat, channelStr);
@@ -300,16 +288,16 @@ namespace QBS.Core
 		{
 			if (!condition)
 			{
-				LogMessage(message, AssertionFailedTag, Color.red, LogLevel.Error, LogChannel.Default, context);
+				LogMessage(message, AssertionFailedTag, Color.red, LogLevel.Error, LogChannel.None, context);
 			}
 		}
 		
 		public static void AssertThrow(bool condition, string message,
-			LogChannel channel = LogChannel.Default, Object context = null)
+			LogChannel channel = LogChannel.None, Object context = null)
 		{
 			if (!condition)
 			{
-				LogMessage($"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, LogLevel.Fatal, LogChannel.Default, context);
+				LogMessage($"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, LogLevel.Fatal, LogChannel.None, context);
 				throw new Exception($"Assertion failed: {message}");
 			}
 		}
