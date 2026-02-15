@@ -25,8 +25,7 @@ namespace QBS.Core.Editor
 
 		private static void WarnUserAboutInactiveLogs()
 		{
-
-			if (!LogConfigWindow.AreLogsEnabled() && !EditorPrefs.GetBool(LogEditorConstants.LogsDisabledWarningShown, false))
+			if (!LogEditorUtility.AreLogsEnabled() && !EditorPrefs.GetBool(LogEditorConstants.LogsDisabledWarningShown, false))
 			{
 				Debug.LogError(
 					"QBS Logging is disabled. Enable it in the "

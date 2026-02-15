@@ -1,21 +1,18 @@
 using System.Linq;
 using UnityEditor;
-using UnityEditor.Build;
 using UnityEngine;
 
 namespace QBS.Core.Editor
 {
 	public class LogConfigWindow : EditorWindow
 	{
-		private Vector2 _scrollPosition;
 		private bool _logsEnabled;
 		private LogLevel _minimumLevel;
-
-		private const string EnableLogsSymbol = "ENABLE_LOGS";
 
 		private GUIStyle _headerStyle;
 		private GUIStyle _sectionStyle;
 		private GUIStyle _boxStyle;
+		private GUIStyle _dropdownStyle;
 
 		public static void ShowWindow()
 		{
@@ -26,15 +23,10 @@ namespace QBS.Core.Editor
 
 		private void OnEnable()
 		{
-			// TODO: Read from LogChannelDefines 
-
-			// for (var i = 0; i < _channels.Length; i++)
-			// {
-			// 	_channelStates[i] = Log.IsChannelEnabled(_channels[i]);
-			// }
-
-			_minimumLevel = Log.MinimumLevel;
-			_logsEnabled = AreLogsEnabled();
+			// Activate all log channels in case a preference isn't set.
+			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, (int)LogChannel.All);
+			_minimumLevel = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel, 0);
+			_logsEnabled = LogEditorUtility.AreLogsEnabled();
 		}
 
 		private void InitializeStyles()
@@ -65,6 +57,15 @@ namespace QBS.Core.Editor
 				{
 					padding = new RectOffset(10, 10, 10, 10),
 					margin = new RectOffset(5, 5, 5, 5),
+				};
+			}
+
+			if (_dropdownStyle == null)
+			{
+				_dropdownStyle = new GUIStyle(EditorStyles.popup)
+				{
+					fixedHeight = 40,
+					fontSize = 14,
 				};
 			}
 		}
@@ -142,13 +143,13 @@ namespace QBS.Core.Editor
 
 			EditorGUILayout.Space(5);
 			EditorGUILayout.BeginHorizontal();
-			EditorGUILayout.LabelField("Current Level:", GUILayout.Width(100));
+			EditorGUILayout.LabelField("Current Level:", GUILayout.Width(100), GUILayout.Height(25));
 
 			var levelColor = GetLevelColor(_minimumLevel);
 			var originalColor = GUI.backgroundColor;
 			GUI.backgroundColor = levelColor;
 
-			var newLevel = (LogLevel)EditorGUILayout.EnumPopup(_minimumLevel, GUILayout.Height(25));
+			var newLevel = (LogLevel)EditorGUILayout.EnumPopup(_minimumLevel, _dropdownStyle);
 
 			GUI.backgroundColor = originalColor;
 
@@ -177,108 +178,58 @@ namespace QBS.Core.Editor
 			EditorGUILayout.BeginHorizontal();
 			if (GUILayout.Button("✓ Enable All", GUILayout.Height(25)))
 			{
-				EnableAllChannels(true);
+				SetStateOfAllChannels(true);
 			}
 			if (GUILayout.Button("✗ Disable All", GUILayout.Height(25)))
 			{
-				EnableAllChannels(false);
-			}
-			if (GUILayout.Button("↻ Reset", GUILayout.Height(25)))
-			{
-				ResetToDefaults();
+				SetStateOfAllChannels(false);
 			}
 			EditorGUILayout.EndHorizontal();
 
 			EditorGUILayout.Space(8);
-
-			var scrollViewStyle = new GUIStyle(GUI.skin.scrollView)
-			{
-				padding = new RectOffset(5, 5, 5, 5),
-			};
-
-			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition, scrollViewStyle, GUILayout.Height(220));
-
-			var enabledCount = 0;
-			// for (var i = 0; i < _channels.Length; i++)
-			// {
-			// 	var channel = _channels[i];
-			// 	var isEnabled = _channelStates[i];
-			//
-			// 	if (isEnabled)
-			// 	{
-			// 		enabledCount++;
-			// 	}
-			//
-			// 	EditorGUILayout.BeginHorizontal();
-			//
-			// 	var channelColor = isEnabled ? Color.white : new Color(0.7f, 0.7f, 0.7f);
-			// 	var originalColor = GUI.contentColor;
-			// 	GUI.contentColor = channelColor;
-			//
-			// 	var icon = isEnabled ? "✓" : "○";
-			// 	var newState = EditorGUILayout.ToggleLeft($"{icon} {channel}", isEnabled);
-			//
-			// 	GUI.contentColor = originalColor;
-			//
-			// 	if (newState != isEnabled)
-			// 	{
-			// 		_channelStates[i] = newState;
-			// 		Log.SetChannelEnabled(channel, newState);
-			// 		SaveChannelState(channel, newState);
-			// 	}
-			//
-			// 	EditorGUILayout.EndHorizontal();
-			// }
-
-			EditorGUILayout.EndScrollView();
-
+			EditorGUILayout.LabelField(
+				$"Active Channels Count: {Log.EnabledChannels.GetActiveLogChannelCount().ToString()}",
+				new GUIStyle(EditorStyles.largeLabel) { alignment = TextAnchor.MiddleCenter });
+			Log.EnabledChannels = (LogChannel)EditorGUILayout.EnumFlagsField(Log.EnabledChannels, _dropdownStyle);
 			EditorGUILayout.Space(5);
-			//EditorGUILayout.LabelField($"Active Channels: {enabledCount}/{_channels.Length}", EditorStyles.miniLabel);
 
 			EditorGUILayout.EndVertical();
 		}
 
-		private Color GetLevelColor(LogLevel level) => level switch
+		private Color GetLevelColor(LogLevel level)
 		{
-			LogLevel.Trace => new Color(0.7f, 0.7f, 0.7f),
-			LogLevel.Debug => new Color(0.6f, 0.8f, 1f),
-			LogLevel.Info => new Color(0.6f, 1f, 0.6f),
-			LogLevel.Warning => new Color(1f, 0.9f, 0.4f),
-			LogLevel.Error => new Color(1f, 0.5f, 0.4f),
-			LogLevel.Fatal => new Color(1f, 0.3f, 0.3f),
-			_ => Color.white,
-		};
+			return level switch
+			{
+				LogLevel.Trace => new Color(0.7f, 0.7f, 0.7f),
+				LogLevel.Debug => new Color(0.6f, 0.8f, 1f),
+				LogLevel.Info => new Color(0.6f, 1f, 0.6f),
+				LogLevel.Warning => new Color(1f, 0.9f, 0.4f),
+				LogLevel.Error => new Color(1f, 0.5f, 0.4f),
+				LogLevel.Fatal => new Color(1f, 0.3f, 0.3f),
+				_ => Color.white,
+			};
+		}
 
 		private void ToggleEnableLogs()
 		{
-			var buildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
-			var namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(buildTargetGroup);
-			var defines = PlayerSettings.GetScriptingDefineSymbols(namedBuildTarget);
+			var defines = LogEditorUtility.GetCurrentBuildProfileDefines(out var namedBuildTarget);
 			var definesList = defines.Split(';').ToList();
 
 			if (_logsEnabled)
 			{
-				if (!definesList.Contains(EnableLogsSymbol))
+				if (!definesList.Contains(LogEditorConstants.LogsEnabledSymbol))
 				{
-					definesList.Add(EnableLogsSymbol);
+					definesList.Add(LogEditorConstants.LogsEnabledSymbol);
 				}
 			}
 			else
 			{
-				definesList.Remove(EnableLogsSymbol);
+				definesList.Remove(LogEditorConstants.LogsEnabledSymbol);
 			}
 
 			var newDefines = string.Join(";", definesList);
 			PlayerSettings.SetScriptingDefineSymbols(namedBuildTarget, newDefines);
 			Debug.Log($"[QBS] Logging {(_logsEnabled ? "enabled" : "disabled")}");
-		}
-
-		public static bool AreLogsEnabled()
-		{
-			var buildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
-			var namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(buildTargetGroup);
-			var defines = PlayerSettings.GetScriptingDefineSymbols(namedBuildTarget);
-			return defines.Contains(EnableLogsSymbol);
 		}
 
 		private void SetMinimumLevel(LogLevel level)
@@ -288,25 +239,10 @@ namespace QBS.Core.Editor
 			Debug.Log($"[QBS] Minimum log level set to: {level}");
 		}
 
-		private void EnableAllChannels(bool enabled)
+		private void SetStateOfAllChannels(bool enabled)
 		{
-			// for (var i = 0; i < _channels.Length; i++)
-			// {
-			// 	_channelStates[i] = enabled;
-			// 	Log.SetChannelEnabled(_channels[i], enabled);
-			// 	SaveChannelState(_channels[i], enabled);
-			// }
-		}
-
-		private void ResetToDefaults()
-		{
-			// for (var i = 0; i < _channels.Length; i++)
-			// {
-			// 	_channelStates[i] = true;
-			// 	Log.SetChannelEnabled(_channels[i], true);
-			// 	var key = LogEditorConstants.GetChannelKey(_channels[i]);
-			// 	EditorPrefs.DeleteKey(key);
-			// }
+			Log.SetChannelEnabled(LogChannel.All, enabled);
+			EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, enabled ? ~0 : 0);
 		}
 
 		private void SaveChannelState(LogChannel channel, bool enabled)

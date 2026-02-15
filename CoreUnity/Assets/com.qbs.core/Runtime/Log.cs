@@ -20,7 +20,7 @@ namespace QBS.Core
 	{
 		[ThreadStatic]
 		private static StringBuilder _sb;
-
+		
 		private static StringBuilder Builder
 		{
 			get
@@ -42,12 +42,10 @@ namespace QBS.Core
 		private const string AssertionFailedTag = "ASSERTION FAILED";
 		private const string ColorStartTag = "<color=#";
 		private const string ColorEndTag = "</color>";
-
-		//Create editor util for setting this
+		
 		public static LogLevel MinimumLevel { get; set; } = LogLevel.Trace;
-		public static LogChannel EnabledChannels { get; private set; }
+		public static LogChannel EnabledChannels { get; set; } = LogChannel.All;
 
-		//Create editor util for setting this
 		public static void SetChannelEnabled(LogChannel channel, bool enabled)
 		{
 			if (enabled)
@@ -301,6 +299,7 @@ namespace QBS.Core
 				throw new Exception($"Assertion failed: {message}");
 			}
 		}
+		
 	}
 
 	

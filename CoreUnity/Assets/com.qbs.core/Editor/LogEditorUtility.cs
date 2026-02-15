@@ -1,0 +1,27 @@
+﻿using UnityEditor;
+using UnityEditor.Build;
+
+namespace QBS.Core.Editor
+{
+	public class LogEditorUtility
+	{
+		public static bool AreLogsEnabled()
+		{
+			var defines = GetCurrentBuildProfileDefines();
+			return defines.Contains(LogEditorConstants.LogsEnabledSymbol);
+		}
+
+		public static string GetCurrentBuildProfileDefines()
+		{
+			var buildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;
+			var namedBuildTarget = NamedBuildTarget.FromBuildTargetGroup(buildTargetGroup);
+			return PlayerSettings.GetScriptingDefineSymbols(namedBuildTarget);;
+		}
+
+		public static string GetCurrentBuildProfileDefines(out NamedBuildTarget buildTarget)
+		{
+			buildTarget = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
+			return PlayerSettings.GetScriptingDefineSymbols(buildTarget);
+		}
+	}
+}
