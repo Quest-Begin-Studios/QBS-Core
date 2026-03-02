@@ -37,6 +37,7 @@ namespace QBS.Core.Editor
 		public string CreateEnumSource<T>(EnumGenParams<T> genParams) where T : struct, IEquatable<T>, IComparable<T>
 		{
 			_sBuilder.Clear();
+			//TODO: Read Gen Params and construct the enum source.
 			return "";
 		}
 
