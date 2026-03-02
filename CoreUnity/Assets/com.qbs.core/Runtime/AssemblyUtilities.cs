@@ -48,6 +48,14 @@ namespace QBS.Core
 		/// </summary>
 		/// <param name="assemblyName">Name of the assembly.</param>
 		/// <returns>AssemblyType corresponding to the assembly name, null if no match.</returns>
+		/// <remarks>These assemblies are limited to what the developer works with on top of the editor code/framework. 
+		///		These will not contain assemblies the Editor itself uses (like System.dll, UnityEngine.dll, etc.). <br/> <br/>
+		///     For more details,
+		///     <see href="https://docs.unity3d.com/2023.3/Documentation/Manual/ScriptCompileOrderFolders.html">
+		///         visit Unity
+		///         Documentation
+		///     </see>
+		/// </remarks>
 		private static UnityAssemblyType GetAssemblyType(string assemblyName) => assemblyName switch
 		{
 			"Assembly-CSharp-firstpass" => UnityAssemblyType.AssemblyCSharpFirstPass,
