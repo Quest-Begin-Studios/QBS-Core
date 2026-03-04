@@ -20,6 +20,8 @@ namespace QBS.Core.Editor
 	{
 		#region Consts
 		
+		private const string UsingSystem = "using System;";
+		
 		private const string NamespaceTemplate = "namespace {0}";
 		private const string EnumNameTemplate = "public enum {0} : {1}";
 		private const string AttributesTemplate = "[{0}]";
@@ -44,6 +46,7 @@ namespace QBS.Core.Editor
 		{
 			// Why is this like this?
 			_indentedWriter = new IndentedTextWriter(new StringWriter(new StringBuilder()));
+			_indentedWriter.WriteLine(UsingSystem);
 			if (!string.IsNullOrEmpty(genParams.Namespace))
 			{
 				_indentedWriter.WriteLine(NamespaceTemplate, genParams.Namespace);
