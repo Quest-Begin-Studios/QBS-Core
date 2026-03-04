@@ -1,59 +1,51 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace QBS.Core.Editor
 {
 	public struct EnumGenParams<T> where T : struct
 	{
+		public string EnumName { get; }
+		public Type BackingType { get; }
+		public string Namespace { get; }
+		public bool EnumHasCustomValues { get; }
+		public EnumAttributeFlags Attributes { get; }
 		
-		private Type _backingType;
-		private string _enumName;
-		private EnumAttributeFlags _attributes;
-		private string _namespace;
-
 		// Collection for generic enum without custom values; can support Flags 
-		private readonly HashSet<string> _baseEnumValues;
-		// Collection for generic enum with custom values; cannot support Flags
-		private readonly Dictionary<string, T> _enumCustomValues;
+		public HashSet<string> BaseEnumKeys { get; }
 		// Flag Combinations
-		private readonly Dictionary<string, HashSet<string>> _flagCombinations;
+		public Dictionary<string, HashSet<string>> FlagCombinations { get; }
 		
-		#region Public Accessors
-		
-		public Type BackingType => _backingType;
-		public string EnumName => _enumName;
-		public EnumAttributeFlags Attributes => _attributes;
-		public string Namespace => _namespace;
-		public HashSet<string> BaseEnumValues => _baseEnumValues;
-		public Dictionary<string, T> EnumCustomValues => _enumCustomValues;
-		public Dictionary<string, HashSet<string>> FlagCombinations => _flagCombinations;
-		
-		#endregion
+		// Collection for generic enum with custom values; cannot support Flags
+		public Dictionary<string, T> EnumKeysAndCustomValues { get; }
 
 		/// <summary>
 		///     Initializes a new instance of the <see cref="EnumGenParams{T}" /> struct that can support enums with custom values.
 		/// </summary>
 		/// <param name="enumName">The name of the enum to generate.</param>
 		/// <param name="attributes">The attributes to apply to the enum. Flags attribute is not supported for custom values.</param>
-		/// <param name="enumCustomValues">A dictionary mapping enum member names to their custom values.</param>
+		/// <param name="enumKeysAndCustomValues">A dictionary mapping enum member names to their custom values.</param>
 		/// <param name="namespace">The namespace to apply to the enum.</param>
 		/// <exception cref="ArgumentException">
 		///     Thrown when Flags attribute is specified or when the backing type is not an
 		///     integral type.
 		/// </exception>
-		public EnumGenParams(string enumName, EnumAttributeFlags attributes, Dictionary<string, T> enumCustomValues, string @namespace = null) : this()
+		public EnumGenParams(string enumName, EnumAttributeFlags attributes, Dictionary<string, T> enumKeysAndCustomValues, string @namespace = null) : this()
 		{
 			if (attributes.HasFlag(EnumAttributeFlags.Flags))
 			{
 				throw new ArgumentException("Flags attribute is not supported for Enums with custom values");
 			}
 
-			_enumName = enumName;
-			_namespace = @namespace;
-			_backingType = typeof(T);
-			_attributes = attributes;
-			_enumCustomValues = enumCustomValues;
-
+			EnumName = enumName;
+			Namespace = @namespace;
+			BackingType = typeof(T);
+			EnumHasCustomValues = true;
+			
+			Attributes = attributes;
+			EnumKeysAndCustomValues = enumKeysAndCustomValues;
+			
 			if (!ValidateType())
 			{
 				throw new ArgumentException("Value must be of a integral type");
@@ -66,7 +58,8 @@ namespace QBS.Core.Editor
 		/// </summary>
 		/// <param name="enumName">The name of the enum to generate.</param>
 		/// <param name="attributes">The attributes to apply to the enum.</param>
-		/// <param name="baseEnumValues">A set of base enum member names.</param>
+		/// <param name="baseEnumKeys">A set of base enum member names.</param>
+		/// <param name="namespace">The namespace the enum needs to be in.</param>
 		/// <param name="flagCombinations">
 		///     Optional dictionary mapping combination flag names to sets of base flag names they
 		///     combine. Only used when Flags attribute is set.
@@ -75,23 +68,25 @@ namespace QBS.Core.Editor
 		///     Thrown when the backing type is not an integral type or when flag combinations
 		///     reference non-existent base values.
 		/// </exception>
-		public EnumGenParams(string enumName, EnumAttributeFlags attributes, HashSet<string> baseEnumValues, string @namespace = null, Dictionary<string, HashSet<string>> flagCombinations = null) : this()
+		public EnumGenParams(string enumName, EnumAttributeFlags attributes, HashSet<string> baseEnumKeys, string @namespace = null, Dictionary<string, HashSet<string>> flagCombinations = null) : this()
 		{
-			_enumName = enumName;
-			_namespace = @namespace;
-			_attributes = attributes;
+			EnumName = enumName;
+			Namespace = @namespace;
+			BackingType = typeof(T);
+			EnumHasCustomValues = false;
 			
-			_baseEnumValues = baseEnumValues;
+			Attributes = attributes;
+			BaseEnumKeys = baseEnumKeys;
 
-			_backingType = typeof(T);
 			if (attributes.HasFlag(EnumAttributeFlags.Flags))
 			{
-				_flagCombinations = flagCombinations;
+				FlagCombinations = flagCombinations;
 				ValidateFlagCombinations();
+				ValidateEnumSize();
 			}
 			else
 			{
-				_flagCombinations = null;
+				FlagCombinations = null;
 			}
 
 			if (!ValidateType())
@@ -100,21 +95,35 @@ namespace QBS.Core.Editor
 			}
 		}
 
+		
+		private void ValidateEnumSize()
+		{
+			// We're subtracting -1 because if the backing field is signed,
+			// the last bit is counted as negative; This leads to some bad maths.
+			var totalBitsAvailable = (Marshal.SizeOf<T>() * 8) - 1;
+			var totalFlags = BaseEnumKeys.Count;
+			if (totalFlags > totalBitsAvailable)
+			{
+				throw new ArgumentException("Too many flags for the backing type");
+			}
+		}
+
 		private bool ValidateFlagCombinations()
 		{
-			if (_flagCombinations == null)
+			if (FlagCombinations == null)
 			{
 				return true;
 			}
 
-			foreach (var (flagName, combination) in _flagCombinations)
+			foreach (var (flagName, combination) in FlagCombinations)
 			{
 				foreach (var enumValue in combination)
 				{
-					if (!_baseEnumValues.Contains(enumValue))
+					if (!BaseEnumKeys.Contains(enumValue))
 					{
 						throw new ArgumentException(
-							$"A combination flag definition {flagName} is trying to reference {enumValue}, but it does not exist in the base flags definition");
+							@$"A combination flag definition {flagName} is trying to reference 
+							{enumValue}, but it does not exist in the base flags definition");
 					}
 				}
 			}
