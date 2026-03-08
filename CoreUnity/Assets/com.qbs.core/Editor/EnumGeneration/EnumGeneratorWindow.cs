@@ -225,7 +225,7 @@ namespace QBS.Core.Editor
 			
 			EditorGUILayout.EndScrollView();
 		}
-		
+
 		private void GenerateEnum()
 		{
 			try

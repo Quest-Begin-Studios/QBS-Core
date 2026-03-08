@@ -68,7 +68,8 @@ namespace QBS.Core.Editor
 		///     Thrown when the backing type is not an integral type or when flag combinations
 		///     reference non-existent base values.
 		/// </exception>
-		public EnumGenParams(string enumName, EnumAttributeFlags attributes, HashSet<string> baseEnumKeys, string @namespace = null, Dictionary<string, HashSet<string>> flagCombinations = null) : this()
+		public EnumGenParams(string enumName, EnumAttributeFlags attributes, HashSet<string> baseEnumKeys, string @namespace = null,
+			Dictionary<string, HashSet<string>> flagCombinations = null) : this()
 		{
 			EnumName = enumName;
 			Namespace = @namespace;

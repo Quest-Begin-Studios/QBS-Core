@@ -109,6 +109,8 @@ namespace QBS.Core
 						}
 					}
 
+					//TODO: Add better filtering for types of "types", only abstract, enums only etc
+					
 					// If concreteOnly is true and the current type is abstract or
 					// an interface, skip type.
 					if (concreteOnly && (type.IsAbstract || type.IsInterface))

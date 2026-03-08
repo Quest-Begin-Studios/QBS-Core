@@ -42,7 +42,7 @@ namespace QBS.Core.Editor
 		/// <typeparam name="T">The backing type for the enum (must be an integral type).</typeparam>
 		/// <param name="genParams">Parameters defining the enum structure, including name, namespace, attributes, and values.</param>
 		/// <returns>A string containing the complete C# enum source code.</returns>
-		public string CreateEnumSource<T>(EnumGenParams<T> genParams) where T : struct, IEquatable<T>, IComparable<T>
+		public string CreateEnumSource<T>(EnumGenParams<T> genParams) where T : struct
 		{
 			// Why is this like this?
 			_indentedWriter = new IndentedTextWriter(new StringWriter(new StringBuilder()));
