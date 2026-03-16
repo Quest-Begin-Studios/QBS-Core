@@ -1,4 +1,4 @@
-﻿using UnityEditor;
+using UnityEditor;
 using UnityEditor.Build;
 
 namespace QBS.Core.Editor
@@ -11,6 +11,7 @@ namespace QBS.Core.Editor
 			return defines.Contains(LogEditorConstants.LogsEnabledSymbol);
 		}
 
+		//TODO: Move to common utils
 		public static string GetCurrentBuildProfileDefines()
 		{
 			var buildTargetGroup = EditorUserBuildSettings.selectedBuildTargetGroup;

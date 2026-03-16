@@ -1,0 +1,81 @@
+using UnityEditor;
+using UnityEngine;
+
+namespace QBS.Core.Editor
+{
+	public static class LogEditorMenu
+	{
+		private const string MenuRoot = "Tools/QBS/Logging/";
+		private const string ConfigureMenu = MenuRoot + "Configure Logging";
+
+		[MenuItem(ConfigureMenu, false, 1)]
+		private static void OpenLogConfiguration()
+		{
+			LogConfigWindow.ShowWindow();
+		}
+
+		[InitializeOnLoadMethod]
+		private static void InitializeLogSettings()
+		{
+			RestoreMinimumLogLevel();
+			RestoreActiveLogChannels();
+			WarnUserAboutInactiveLogs();
+
+			EditorApplication.quitting -= OnQuit;
+			EditorApplication.quitting += OnQuit;
+
+			EditorApplication.playModeStateChanged -= OnStateChange;
+			EditorApplication.playModeStateChanged += OnStateChange;
+		}
+
+		private static void OnStateChange(PlayModeStateChange state)
+		{
+			if (state != PlayModeStateChange.ExitingPlayMode)
+			{
+				return;
+			}
+
+			EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)Log.EnabledChannels);
+			EditorPrefs.SetInt(LogEditorConstants.MinimumLevel, (int)Log.MinimumLevel);
+		}
+
+		private static void WarnUserAboutInactiveLogs()
+		{
+			var areLogsEnabled = LogEditorUtility.AreLogsEnabled();
+			var warningShown = EditorPrefs.GetBool(LogEditorConstants.LogsDisabledWarningShown, false);
+			if (areLogsEnabled || warningShown)
+			{
+				return;
+			}
+			
+			Debug.LogError
+			(
+				"QBS Logging is disabled. Enable it in the "
+				+ "Log Configuration window to utilize the logging utility."
+				+ " \nTools -> QBS -> Logging -> Configure Logging "
+			);
+
+			EditorPrefs.SetBool(LogEditorConstants.LogsDisabledWarningShown, true);
+
+		}
+
+		private static void RestoreActiveLogChannels()
+		{
+			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, ~0);
+		}
+
+		private static void RestoreMinimumLogLevel()
+		{
+			if (EditorPrefs.HasKey(LogEditorConstants.MinimumLevel))
+			{
+				var level = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel);
+				Log.MinimumLevel = level;
+			}
+		}
+
+		private static void OnQuit()
+		{
+			EditorPrefs.SetBool(LogEditorConstants.LogsDisabledWarningShown, false);
+		}
+	}
+}

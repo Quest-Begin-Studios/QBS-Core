@@ -1,11 +1,11 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
 namespace QBS.Core
 {
-	public partial class Log
+	public static partial class Log
 	{
 		public static LogBuilder WithChannel(LogChannel channel) => new LogBuilder { Channel = channel };
 		public static LogBuilder WithTag(string tag) => new LogBuilder { Tag = tag };
@@ -14,7 +14,7 @@ namespace QBS.Core
 		
 		public class LogBuilder
 		{
-			internal LogChannel Channel { get; set; } = LogChannel.None;
+			internal LogChannel Channel { get; set; }
 			internal string Tag { get; set; }
 			internal Color Color { get; set; }
 			internal Object Context { get; set; }

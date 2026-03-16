@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -20,20 +21,11 @@ namespace QBS.Core
 	{
 		[ThreadStatic]
 		private static StringBuilder _sb;
-		
 		private static StringBuilder Builder
 		{
 			get
 			{
-				if (_sb == null)
-				{
-					_sb = new StringBuilder(256);
-				}
-				// Cap capacity to avoid holding huge buffers
-				else if (_sb.Capacity > 4096)
-				{
-					_sb.Capacity = 4096;
-				}
+				_sb ??= new StringBuilder(capacity: 512);
 				return _sb;
 			}
 		}
@@ -42,10 +34,12 @@ namespace QBS.Core
 		private const string AssertionFailedTag = "ASSERTION FAILED";
 		private const string ColorStartTag = "<color=#";
 		private const string ColorEndTag = "</color>";
-		
+
 		public static LogLevel MinimumLevel { get; set; } = LogLevel.Trace;
 		public static LogChannel EnabledChannels { get; set; } = LogChannel.All;
 
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void SetChannelEnabled(LogChannel channel, bool enabled)
 		{
 			if (enabled)
@@ -58,54 +52,96 @@ namespace QBS.Core
 			}
 		}
 
-		public static bool IsChannelEnabled(LogChannel channel) => (EnabledChannels & channel) != 0;
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool IsChannelEnabled(LogChannel channel)
+		{
+			return (EnabledChannels & channel) != 0;
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Trace(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage(message, tag, color, LogLevel.Trace, channel, context);
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Debug(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage(message, tag, color, LogLevel.Debug, channel, context);
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Info(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage(message, tag, color, LogLevel.Info, channel, context);
-		
+		}
+
 		// String allocation
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
 		public static void InfoSnipe(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage($"( -_•)▄︻デ══━一 {message}", tag, color, LogLevel.Info, channel, context);
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Warning(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage(message, tag, color, LogLevel.Warning, channel, context);
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage(message, tag, color, LogLevel.Error, channel, context);
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, Exception exception, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessageWithException(message, exception, tag, color, LogLevel.Error, channel, context);
+		}
 
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessage(message, tag, color, LogLevel.Fatal, channel, context);
+		}
 
+		[HideInCallstack]
 		[Conditional("ENABLE_LOGS")]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, Exception exception, string tag = null, Color color = default,
-			LogChannel channel = LogChannel.None, Object context = null) =>
+			LogChannel channel = default, Object context = null)
+		{
 			LogMessageWithException(message, exception, tag, color, LogLevel.Fatal, channel, context);
+		}
 
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogMessage(string message, string tag, Color color,
 			LogLevel level, LogChannel channel, Object context)
 		{
@@ -114,20 +150,20 @@ namespace QBS.Core
 				return;
 			}
 
-			if (!IsChannelEnabled(channel) && channel != LogChannel.None)
+			if (!IsChannelEnabled(channel) && channel != default)
 			{
 				return;
 			}
 
 			// Append level first.
-			var levelStr = level.ToString();
+			var levelStr = level.ToStringNoBox();
 			Builder.Clear();
 			Builder.AppendFormat(BracketsFormat, levelStr);
 
 			// Append channel if specified.
-			if (channel != LogChannel.None)
+			if (channel != default)
 			{
-				var channelStr = channel.ToString();
+				var channelStr = channel.ToStringNoBox();
 				Builder.AppendFormat(BracketsFormat, channelStr);
 			}
 
@@ -162,6 +198,7 @@ namespace QBS.Core
 			}
 		}
 
+		[HideInCallstack]
 		private static void LogMessageWithException(string message, Exception exception, string tag, Color color,
 			LogLevel level, LogChannel channel, Object context)
 		{
@@ -170,20 +207,20 @@ namespace QBS.Core
 				return;
 			}
 
-			if (!IsChannelEnabled(channel) && channel != LogChannel.None)
+			if (!IsChannelEnabled(channel) && channel != default)
 			{
 				return;
 			}
 
 			// Append level first.
-			var levelStr = level.ToString();
+			var levelStr = level.ToStringNoBox();
 			Builder.Clear();
 			Builder.AppendFormat(BracketsFormat, levelStr);
 
 			// Append channel if specified.
-			if (channel != LogChannel.None)
+			if (channel != default)
 			{
-				var channelStr = channel.ToString();
+				var channelStr = channel.ToStringNoBox();
 				Builder.AppendFormat(BracketsFormat, channelStr);
 			}
 
@@ -208,13 +245,20 @@ namespace QBS.Core
 				Builder.Append(message);
 			}
 
-			// Append exception details
-			Builder.Append("\n");
-			Builder.Append(exception.GetType().Name);
-			Builder.Append(": ");
-			Builder.Append(exception.Message);
-			Builder.Append("\n");
-			Builder.Append(exception.StackTrace);
+			if (exception == null)
+			{
+				Builder.Append("\n Passed Exception is null");
+			}
+			else
+			{
+				// Append exception details
+				Builder.Append("\n");
+				Builder.Append(exception.GetType().Name);
+				Builder.Append(": ");
+				Builder.Append(exception.Message);
+				Builder.Append("\n");
+				Builder.Append(exception.StackTrace);
+			}
 
 			if (context != null)
 			{
@@ -226,6 +270,8 @@ namespace QBS.Core
 			}
 		}
 
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnity(LogLevel level, string toString)
 		{
 			switch (level)
@@ -253,6 +299,8 @@ namespace QBS.Core
 			}
 		}
 
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnityWithReference(LogLevel level, string toString, Object context)
 		{
 			switch (level)
@@ -282,25 +330,39 @@ namespace QBS.Core
 
 		// Assert methods
 		[Conditional("ENABLE_LOGS")]
+		[HideInCallstack]
 		public static void Assert(bool condition, string message, Object context = null)
 		{
 			if (!condition)
 			{
-				LogMessage(message, AssertionFailedTag, Color.red, LogLevel.Error, LogChannel.None, context);
+				LogMessage(message, AssertionFailedTag, Color.red, LogLevel.Error, default, context);
 			}
 		}
-		
-		public static void AssertThrow(bool condition, string message,
-			LogChannel channel = LogChannel.None, Object context = null)
+
+		[HideInCallstack]
+		public static void AssertThrow(bool condition, string message, Object context = null)
 		{
 			if (!condition)
 			{
-				LogMessage($"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, LogLevel.Fatal, LogChannel.None, context);
+				LogMessage($"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, LogLevel.Fatal, default, context);
 				throw new Exception($"Assertion failed: {message}");
 			}
 		}
-		
+
+		private static string ToStringNoBox(this LogLevel level)
+		{
+			return level switch
+			{
+				LogLevel.Trace => nameof(LogLevel.Trace),
+				LogLevel.Debug => nameof(LogLevel.Debug),
+				LogLevel.Info => nameof(LogLevel.Info),
+				LogLevel.Warning => nameof(LogLevel.Warning),
+				LogLevel.Error => nameof(LogLevel.Error),
+				LogLevel.Fatal => nameof(LogLevel.Fatal),
+				_ => "",
+			};
+		}
 	}
 
-	
+
 }

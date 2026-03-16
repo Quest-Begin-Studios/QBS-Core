@@ -122,8 +122,7 @@ namespace QBS.Core.Editor
 				{
 					if (!BaseEnumKeys.Contains(enumValue))
 					{
-						throw new ArgumentException(
-							@$"A combination flag definition {flagName} is trying to reference 
+						throw new ArgumentException( @$"A combination flag definition {flagName} is trying to reference 
 							{enumValue}, but it does not exist in the base flags definition");
 					}
 				}

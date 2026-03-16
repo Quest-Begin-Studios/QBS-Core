@@ -1,7 +1,6 @@
 using System;
 using System.CodeDom.Compiler;
 using System.IO;
-using System.Text;
 
 namespace QBS.Core.Editor
 {

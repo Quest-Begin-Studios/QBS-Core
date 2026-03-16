@@ -11,9 +11,7 @@ namespace QBS.Core.Editor
 	{
 		None = 0,
 		Flags = 1 << 0,
-
-		//TODO: Create EnumToStringNoBox Generators
-		//StringEnum = 1 << 1,
+		StringEnum = 1 << 1,
 	}
 
 	public class EnumSourceGenerator : IDisposable
@@ -23,8 +21,8 @@ namespace QBS.Core.Editor
 		private const string UsingSystem = "using System;";
 		
 		private const string NamespaceTemplate = "namespace {0}";
-		private const string EnumNameTemplate = "public enum {0} : {1}";
 		private const string AttributesTemplate = "[{0}]";
+		private const string EnumNameTemplate = "public enum {0} : {1}";
 		
 		private const string EnumKeyTemplate = "{0},";
 		private const string EnumKeyValueTemplate = "{0} = {1},";
@@ -45,7 +43,7 @@ namespace QBS.Core.Editor
 		public string CreateEnumSource<T>(EnumGenParams<T> genParams) where T : struct
 		{
 			// Why is this like this?
-			_indentedWriter = new IndentedTextWriter(new StringWriter(new StringBuilder()));
+			_indentedWriter = new IndentedTextWriter(new StringWriter(new StringBuilder()), "	");
 			_indentedWriter.WriteLine(UsingSystem);
 			if (!string.IsNullOrEmpty(genParams.Namespace))
 			{
@@ -57,9 +55,13 @@ namespace QBS.Core.Editor
 			//TODO: Add more attribute support as required
 			if ((genParams.Attributes & EnumAttributeFlags.Flags) == EnumAttributeFlags.Flags)
 			{
-				_indentedWriter.WriteLine(AttributesTemplate, "Flags");
+				_indentedWriter.Write(AttributesTemplate, "Flags");
 			}
-			
+			if ((genParams.Attributes & EnumAttributeFlags.StringEnum) == EnumAttributeFlags.StringEnum)
+			{
+				_indentedWriter.Write(AttributesTemplate, "StringEnum");
+			}
+			_indentedWriter.WriteLine();
 			_indentedWriter.WriteLine(EnumNameTemplate, genParams.EnumName, genParams.BackingType.Name);
 			_indentedWriter.WriteLine("{");
 			_indentedWriter.Indent++;
@@ -110,6 +112,13 @@ namespace QBS.Core.Editor
 				_indentedWriter.WriteLine(EnumKeyValueTemplate, baseEnumValues, flagVal.ToString());
 				index++;
 			}
+
+			//if no composite flags exist, just write the "All = ~None" entry and exit	
+			if (flagCombinations == null)
+			{
+				_indentedWriter.WriteLine(EnumFlagsEverything);
+				return;
+			}
 			
 			// Write combination flags that combine multiple base flags using bitwise OR
 			foreach (var (flagName, flagValues) in flagCombinations)
@@ -149,6 +158,8 @@ namespace QBS.Core.Editor
 
 		public void Dispose()
 		{
+			_indentedWriter.InnerWriter.Dispose();
+			_indentedWriter.Dispose();
 			_indentedWriter = null;
 		}
 	}

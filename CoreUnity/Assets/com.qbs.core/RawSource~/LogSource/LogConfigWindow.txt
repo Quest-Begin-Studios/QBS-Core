@@ -1,0 +1,489 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
+using UnityEngine;
+
+namespace QBS.Core.Editor
+{
+	public class LogConfigWindow : EditorWindow
+	{
+		private const int MaxChannelsPerRow = 5;
+		private bool _logsEnabled;
+		private LogLevel _minimumLevel;
+
+		private GUIStyle _headerStyle;
+		private GUIStyle _sectionStyle;
+		private GUIStyle _boxStyle;
+		private Vector2 _channelScrollPosition;
+		private Vector2 _windowScrollPosition;
+		private List<LogChannel> _individualChannels;
+		private List<(LogChannel channel, string name)> _compositeChannels;
+
+		public static void ShowWindow()
+		{
+			var window = GetWindow<LogConfigWindow>("Log Configuration");
+			window.minSize = new Vector2(450, 820);
+			window.Show();
+		}
+
+		private void OnEnable()
+		{
+			// Activate all log channels in case a preference isn't set.
+			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, ~0);
+			_minimumLevel = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel, 0);
+			_logsEnabled = LogEditorUtility.AreLogsEnabled();
+			
+			var logChannelValues = Enum.GetValues(typeof(LogChannel));
+			_individualChannels = GetIndividualChannels(logChannelValues);
+			_compositeChannels = GetCompositeChannels(logChannelValues);
+		}
+
+		private void InitializeStyles()
+		{
+			_headerStyle ??= new GUIStyle(EditorStyles.largeLabel)
+			{
+				fontSize = 18,
+				fontStyle = FontStyle.Bold,
+				alignment = TextAnchor.MiddleCenter,
+				margin = new RectOffset(0, 0, 10, 10),
+			};
+
+			_sectionStyle ??= new GUIStyle(EditorStyles.boldLabel)
+			{
+				fontSize = 13,
+				margin = new RectOffset(5, 0, 5, 5),
+			};
+
+			_boxStyle ??= new GUIStyle(GUI.skin.box)
+			{
+				padding = new RectOffset(10, 10, 10, 10),
+				margin = new RectOffset(5, 5, 5, 5),
+			};
+		}
+
+		private void OnGUI()
+		{
+			InitializeStyles();
+
+			EditorGUILayout.Space(15);
+			EditorGUILayout.LabelField("QBS Log Configuration", _headerStyle);
+			DrawSeparator();
+			EditorGUILayout.Space(10);
+
+			DrawEnableLogsSection();
+			EditorGUILayout.Space(15);
+			DrawMinimumLevelSection();
+			EditorGUILayout.Space(15);
+			DrawChannelsSection();
+			EditorGUILayout.Space(10);
+		}
+
+		private void DrawSeparator()
+		{
+			var rect = EditorGUILayout.GetControlRect(false, 1);
+			EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.5f));
+		}
+
+		private void DrawEnableLogsSection()
+		{
+			EditorGUILayout.BeginVertical(_boxStyle);
+
+			EditorGUILayout.LabelField("⚙ Enable Logs", _sectionStyle);
+			EditorGUILayout.Space(3);
+
+			EditorGUILayout.HelpBox
+			(
+				"Toggle the ENABLE_LOGS scripting define symbol. Logs are compiled out when disabled.",
+				MessageType.Info
+			);
+
+			if (EditorApplication.isCompiling)
+			{
+				EditorGUILayout.Space(5);
+				EditorGUILayout.HelpBox
+				(
+					"⏳ Scripts are compiling...",
+					MessageType.Warning
+				);
+			}
+
+			EditorGUILayout.Space(5);
+			EditorGUILayout.BeginHorizontal();
+			GUILayout.FlexibleSpace();
+
+			var toggleColor = _logsEnabled ? new Color(0.3f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.3f);
+			var originalColor = GUI.backgroundColor;
+			GUI.backgroundColor = toggleColor;
+
+			EditorGUI.BeginDisabledGroup(EditorApplication.isCompiling);
+			var newLogsEnabled = GUILayout.Toggle
+			(
+				_logsEnabled,
+				_logsEnabled ? "✓ Enabled" : "✗ Disabled",
+				GUI.skin.button,
+				GUILayout.Width(120),
+				GUILayout.Height(30)
+			);
+			EditorGUI.EndDisabledGroup();
+
+			GUI.backgroundColor = originalColor;
+
+			if (newLogsEnabled != _logsEnabled)
+			{
+				_logsEnabled = newLogsEnabled;
+				ToggleEnableLogs();
+			}
+
+			GUILayout.FlexibleSpace();
+			EditorGUILayout.EndHorizontal();
+			EditorGUILayout.Space(5);
+
+			EditorGUILayout.EndVertical();
+		}
+
+		private void DrawMinimumLevelSection()
+		{
+			EditorGUILayout.BeginVertical(_boxStyle);
+
+			EditorGUILayout.LabelField("📊 Minimum Log Level", _sectionStyle);
+			EditorGUILayout.Space(3);
+
+			EditorGUILayout.HelpBox("Only logs at or above this level will be displayed.", MessageType.Info);
+
+			EditorGUILayout.Space(5);
+			EditorGUILayout.BeginHorizontal();
+			EditorGUILayout.LabelField("Current Level:", GUILayout.Width(100));
+
+			var levelColor = GetLevelColor(_minimumLevel);
+			var originalColor = GUI.backgroundColor;
+			GUI.backgroundColor = levelColor;
+
+			var newLevel = (LogLevel)EditorGUILayout.EnumPopup(_minimumLevel);
+
+			GUI.backgroundColor = originalColor;
+
+			if (newLevel != _minimumLevel)
+			{
+				_minimumLevel = newLevel;
+				SetMinimumLevel(newLevel);
+			}
+			EditorGUILayout.EndHorizontal();
+			EditorGUILayout.EndVertical();
+		}
+
+		private void DrawChannelsSection()
+		{
+			EditorGUILayout.BeginVertical(_boxStyle);
+
+			EditorGUILayout.LabelField("📡 Log Channels", _sectionStyle);
+			EditorGUILayout.Space(3);
+
+			EditorGUILayout.HelpBox
+			(
+				"Enable or disable specific log channels. Disabled channels will not output logs.",
+				MessageType.Info
+			);
+
+			EditorGUILayout.Space(5);
+			EditorGUILayout.BeginHorizontal();
+			if (GUILayout.Button("✓ Enable All", GUILayout.Height(25)))
+			{
+				SetStateOfAllChannels(true);
+			}
+			if (GUILayout.Button("✗ Disable All", GUILayout.Height(25)))
+			{
+				SetStateOfAllChannels(false);
+			}
+			EditorGUILayout.EndHorizontal();
+
+			EditorGUILayout.Space(8);
+			EditorGUILayout.LabelField("Individual Channels:", EditorStyles.boldLabel);
+			EditorGUILayout.Space(3);
+			DrawIndividualChannels();
+
+			EditorGUILayout.Space(8);
+			EditorGUILayout.LabelField("Composite Channels:", EditorStyles.boldLabel);
+			EditorGUILayout.Space(3);
+			DrawCompositeChannels();
+
+			EditorGUILayout.Space(8);
+			DrawSeparator();
+			EditorGUILayout.Space(5);
+			EditorGUILayout.LabelField("Active Channels:", EditorStyles.boldLabel);
+			EditorGUILayout.Space(3);
+			DrawActiveChannelsList();
+			EditorGUILayout.Space(5);
+
+			EditorGUILayout.EndVertical();
+		}
+
+		private Color GetLevelColor(LogLevel level)
+		{
+			return level switch
+			{
+				LogLevel.Trace => new Color(0.7f, 0.7f, 0.7f),
+				LogLevel.Debug => new Color(0.6f, 0.8f, 1f),
+				LogLevel.Info => new Color(0.6f, 1f, 0.6f),
+				LogLevel.Warning => new Color(1f, 0.9f, 0.4f),
+				LogLevel.Error => new Color(1f, 0.5f, 0.4f),
+				LogLevel.Fatal => new Color(1f, 0.3f, 0.3f),
+				_ => Color.white,
+			};
+		}
+
+		private void ToggleEnableLogs()
+		{
+			var defines = LogEditorUtility.GetCurrentBuildProfileDefines(out var namedBuildTarget);
+			var definesList = defines.Split(';').ToList();
+
+			if (_logsEnabled)
+			{
+				if (!definesList.Contains(LogEditorConstants.LogsEnabledSymbol))
+				{
+					definesList.Add(LogEditorConstants.LogsEnabledSymbol);
+				}
+			}
+			else
+			{
+				definesList.Remove(LogEditorConstants.LogsEnabledSymbol);
+			}
+
+			var newDefines = string.Join(";", definesList);
+			PlayerSettings.SetScriptingDefineSymbols(namedBuildTarget, newDefines);
+			Debug.Log($"[QBS] Logging {(_logsEnabled ? "enabled" : "disabled")}");
+		}
+
+		private void SetMinimumLevel(LogLevel level)
+		{
+			Log.MinimumLevel = level;
+			EditorPrefs.SetInt(LogEditorConstants.MinimumLevel, (int)level);
+			Debug.Log($"[QBS] Minimum log level set to: {level}");
+		}
+
+		private void SetStateOfAllChannels(bool enabled)
+		{
+			Log.SetChannelEnabled(LogChannel.All, enabled);
+			EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, enabled ? ~0 : 0);
+		}
+
+		private void DrawActiveChannelsList()
+		{
+			var activeChannels = GetActiveChannels();
+
+			if (activeChannels.Count == 0)
+			{
+				var emptyBoxStyle = new GUIStyle(GUI.skin.box)
+				{
+					padding = new RectOffset(15, 15, 12, 12),
+					alignment = TextAnchor.MiddleCenter,
+				};
+
+				var originalBg = GUI.backgroundColor;
+				GUI.backgroundColor = new Color(0.8f, 0.4f, 0.2f, 0.3f);
+
+				EditorGUILayout.BeginVertical(emptyBoxStyle);
+				GUI.backgroundColor = originalBg;
+
+				var warningStyle = new GUIStyle(EditorStyles.boldLabel)
+				{
+					fontSize = 11,
+					normal = { textColor = new Color(1f, 0.7f, 0.4f) },
+					alignment = TextAnchor.MiddleCenter,
+				};
+				EditorGUILayout.LabelField("⚠ No channels are currently active", warningStyle);
+
+				EditorGUILayout.EndVertical();
+			}
+			else
+			{
+				var boxStyle = new GUIStyle(GUI.skin.box)
+				{
+					padding = new RectOffset(12, 12, 10, 10),
+				};
+
+				var originalBg = GUI.backgroundColor;
+				GUI.backgroundColor = new Color(0.2f, 0.4f, 0.3f, 0.4f);
+
+				EditorGUILayout.BeginVertical(boxStyle);
+				GUI.backgroundColor = originalBg;
+
+				var channelIndex = 0;
+
+				while (channelIndex < activeChannels.Count)
+				{
+					EditorGUILayout.BeginHorizontal();
+
+					for (var i = 0; i < MaxChannelsPerRow && channelIndex < activeChannels.Count; i++)
+					{
+						var channel = activeChannels[channelIndex];
+
+						var badgeStyle = new GUIStyle(GUI.skin.box)
+						{
+							padding = new RectOffset(10, 10, 5, 5),
+							margin = new RectOffset(2, 2, 2, 2),
+							fontSize = 11,
+							fontStyle = FontStyle.Bold,
+							alignment = TextAnchor.MiddleCenter,
+							normal = { textColor = new Color(0.9f, 0.9f, 0.9f) },
+						};
+
+						var badgeBg = GUI.backgroundColor;
+						GUI.backgroundColor = new Color(0.3f, 0.7f, 0.5f, 0.8f);
+
+						GUILayout.Label(channel.ToString(), badgeStyle);
+
+						GUI.backgroundColor = badgeBg;
+						channelIndex++;
+					}
+
+					EditorGUILayout.EndHorizontal();
+				}
+
+				EditorGUILayout.Space(5);
+
+				var rect = EditorGUILayout.GetControlRect(false, 1);
+				EditorGUI.DrawRect(rect, new Color(0.3f, 0.7f, 0.5f, 0.4f));
+
+				EditorGUILayout.Space(3);
+
+				var countStyle = new GUIStyle(EditorStyles.miniLabel)
+				{
+					alignment = TextAnchor.MiddleCenter,
+					fontSize = 10,
+					fontStyle = FontStyle.Bold,
+					normal = { textColor = new Color(0.6f, 0.9f, 0.7f) },
+				};
+
+				EditorGUILayout.LabelField
+				(
+					$"✓ {activeChannels.Count} of {_individualChannels.Count} channels active",
+					countStyle
+				);
+
+				EditorGUILayout.EndVertical();
+			}
+		}
+
+		private List<LogChannel> GetIndividualChannels(Array values)
+		{
+			return values
+				.Cast<LogChannel>()
+				.Where(c => c != LogChannel.None && c != LogChannel.All && IsPowerOfTwo((int)c))
+				.OrderBy(c => c.ToString())
+				.ToList();
+		}
+
+		private List<(LogChannel channel, string name)> GetCompositeChannels(Array values)
+		{
+			return values
+				.Cast<LogChannel>()
+				.Where(c => c != LogChannel.None && c != LogChannel.All && HasMultipleBitsSet((int)c))
+				.OrderBy(c => c.ToString())
+				.Select(c => (c, c.ToString()))
+				.ToList();
+		}
+
+		private bool IsPowerOfTwo(int value)
+		{
+			return value != 0 && (value & value - 1) == 0;
+		}
+
+		private bool HasMultipleBitsSet(int value)
+		{
+			if (value == 0) return false;
+			
+			var count = 0;
+			while (value != 0)
+			{
+				value &= value - 1;
+				count++;
+				if (count > 1) return true;
+			}
+			return false;
+		}
+
+		private void DrawIndividualChannels()
+		{
+			const int toggleWidth = 140;
+			const int padding = 20;
+			var availableWidth = position.width - padding;
+			var columns = Mathf.Max(1, (int)(availableWidth / toggleWidth));
+		
+			var channelIndex = 0;
+
+			while (channelIndex < _individualChannels.Count)
+			{
+				EditorGUILayout.BeginHorizontal();
+
+				for (var i = 0; i < columns && channelIndex < _individualChannels.Count; i++)
+				{
+					var channel = _individualChannels[channelIndex];
+					var isEnabled = Log.IsChannelEnabled(channel);
+
+					var newEnabled = EditorGUILayout.ToggleLeft(channel.ToString(), isEnabled, GUILayout.Width(toggleWidth));
+					if (newEnabled != isEnabled)
+					{
+						Log.SetChannelEnabled(channel, newEnabled);
+						EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)Log.EnabledChannels);
+					}
+
+					channelIndex++;
+				}
+
+				EditorGUILayout.EndHorizontal();
+			}
+		}
+
+		private void DrawCompositeChannels()
+		{
+			EditorGUILayout.BeginHorizontal();
+
+			foreach (var (channel, enumName) in _compositeChannels)
+			{
+				var buttonStyle = new GUIStyle(GUI.skin.button)
+				{
+					fontStyle = FontStyle.Bold,
+					padding = new RectOffset(10, 10, 6, 6),
+				};
+
+				var isFullyEnabled = (Log.EnabledChannels & channel) == channel;
+				var originalBg = GUI.backgroundColor;
+				GUI.backgroundColor = isFullyEnabled ? new Color(0.3f, 0.7f, 0.5f) : new Color(0.5f, 0.5f, 0.5f);
+
+				if (GUILayout.Button(enumName, buttonStyle, GUILayout.Height(28)))
+				{
+					if (isFullyEnabled)
+					{
+						Log.EnabledChannels &= ~channel;
+					}
+					else
+					{
+						Log.EnabledChannels |= channel;
+					}
+					EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)Log.EnabledChannels);
+				}
+
+				GUI.backgroundColor = originalBg;
+			}
+
+			EditorGUILayout.EndHorizontal();
+		}
+
+		private List<LogChannel> GetActiveChannels()
+		{
+			var activeChannels = new List<LogChannel>();
+
+			for (var i = 0; i < _individualChannels.Count; i++)
+			{
+				var channel = _individualChannels[i];
+				if (Log.IsChannelEnabled(channel))
+				{
+					activeChannels.Add(channel);
+				}
+			}
+
+			return activeChannels;
+		}
+	}
+}
