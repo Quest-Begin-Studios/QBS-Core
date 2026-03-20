@@ -1,5 +1,6 @@
 using System;
 using System.CodeDom.Compiler;
+using System.Collections.Generic;
 using System.IO;
 
 namespace QBS.Core.Editor
@@ -14,7 +15,7 @@ namespace QBS.Core.Editor
 			return GenerateNoBoxStringsFromSource(enumTypeName, enumValues, typeof(T).Namespace);
 		}
 
-		public string GenerateNoBoxStringsFromSource(string enumTypeName, string[] enumKeys, string namespaceName = null)
+		public string GenerateNoBoxStringsFromSource(string enumTypeName, IEnumerable<string> enumKeys, string namespaceName = null)
 		{
 			const string paramName = "value";
 			var className = $"{enumTypeName}StringUtils";

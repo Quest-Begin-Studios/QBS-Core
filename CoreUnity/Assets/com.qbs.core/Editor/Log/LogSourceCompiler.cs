@@ -2,6 +2,7 @@ using QBS.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -9,18 +10,23 @@ namespace QBS.Editor
 {
 	public class LogSourceCompiler : EditorWindow
 	{
+		private const string LogChannelsName = "LogChannel";
+		private const string NamespaceStr = "QBS.Core";
+
 		private enum Tab
 		{
 			SourceFetch,
 			EnumGeneration,
+			SourceCompilation,
 		}
 
-		private Tab _currentTab;
 		private EnumGeneratorComponent _enumGenerator;
+		private StringEnumGenerator _stringEnumGenerator;
+		private Tab _currentTab;
 		private Vector2 _scrollPosition;
 		private string _selectedFolderPath = "";
 
-		private List<string> _sourceStrings;
+		private List<SourceFile> _sourceFiles;
 		private string _capturedEnumCode = "";
 		private Vector2 _fileListScrollPosition;
 
@@ -33,16 +39,24 @@ namespace QBS.Editor
 
 		private void OnEnable()
 		{
-			_sourceStrings = new List<string>();
+			_sourceFiles = new List<SourceFile>();
 			_enumGenerator = new EnumGeneratorComponent();
 			_enumGenerator.Initialize();
 			_enumGenerator.ConfigureEnumProperties
 			(
-				"LogChannel",
-				"QBS.Core",
+				LogChannelsName,
+				NamespaceStr,
 				EnumGeneratorComponent.EnumTypeOption.Flags,
 				EnumGeneratorComponent.BackingType.Int
 			);
+			_stringEnumGenerator = new StringEnumGenerator();
+		}
+
+		private void OnDisable()
+		{
+			_sourceFiles = null;
+			_enumGenerator = null;
+			_capturedEnumCode = "";
 		}
 
 		private void OnGUI()
@@ -59,14 +73,19 @@ namespace QBS.Editor
 
 			switch (_currentTab)
 			{
+				case Tab.SourceFetch:
+				{
+					DrawSourceFetchTab();
+					break;
+				}
 				case Tab.EnumGeneration:
 				{
 					DrawEnumGenerationTab();
 					break;
 				}
-				case Tab.SourceFetch:
+				case Tab.SourceCompilation:
 				{
-					DrawSourceFetchTab();
+					DrawSourceCompilationTab();
 					break;
 				}
 			}
@@ -74,16 +93,53 @@ namespace QBS.Editor
 			EditorGUILayout.EndScrollView();
 		}
 
+		private void DrawSourceCompilationTab()
+		{
+			if (GUILayout.Button("Compile", GUILayout.Height(50)))
+			{
+				try
+				{
+					WriteSourceFilesToTemp();
+					DLLGenerationHelper.TryGeneratingDLL(_sourceFiles, "Log", "Log");
+				}
+				catch (Exception e)
+				{
+					Debug.LogException(e);
+				}
+			}
+		}
+
+		private void WriteSourceFilesToTemp()
+		{
+			var tempPath = Path.Combine(Path.GetTempPath(), "QBS_LogSourceCompilation");
+			
+			if (Directory.Exists(tempPath))
+			{
+				Directory.Delete(tempPath, true);
+			}
+			
+			Directory.CreateDirectory(tempPath);
+			
+			foreach (var sourceFile in _sourceFiles)
+			{
+				var filePath = Path.Combine(tempPath, sourceFile.FilePath);
+				File.WriteAllText(filePath, sourceFile.SourceContent);
+			}
+			
+			Debug.Log($"Source files written to: {tempPath}");
+		}
+
 		private void DrawTabBar()
 		{
-			if (_sourceStrings == null || _sourceStrings.Count == 0)
+			if (_sourceFiles == null || _sourceFiles.Count == 0)
 			{
+				_currentTab = Tab.SourceFetch;
 				return;
 			}
 			
 			EditorGUILayout.BeginHorizontal();
 
-			if (GUILayout.Toggle(_currentTab == Tab.SourceFetch, "Source Compilation", EditorStyles.toolbarButton))
+			if (GUILayout.Toggle(_currentTab == Tab.SourceFetch, "Fetch Source", EditorStyles.toolbarButton))
 			{
 				_currentTab = Tab.SourceFetch;
 			}
@@ -91,6 +147,14 @@ namespace QBS.Editor
 			if (GUILayout.Toggle(_currentTab == Tab.EnumGeneration, "Enum Generation", EditorStyles.toolbarButton))
 			{
 				_currentTab = Tab.EnumGeneration;
+			}
+
+			if (!string.IsNullOrEmpty(_capturedEnumCode))
+			{
+				if (GUILayout.Toggle(_currentTab == Tab.SourceCompilation, "Source Generation", EditorStyles.toolbarButton))
+				{
+					_currentTab = Tab.SourceCompilation;
+				}
 			}
 
 			EditorGUILayout.EndHorizontal();
@@ -112,7 +176,16 @@ namespace QBS.Editor
 			if (_enumGenerator.DrawGenerateEnumButton())
 			{
 				_capturedEnumCode = _enumGenerator.GeneratedCode;
-				_sourceStrings.Add(_capturedEnumCode);
+				
+				//Also generate the relevant ToStringNoBox methods:
+				var enumKeys = new List<string>();
+				enumKeys.AddRange(_enumGenerator.EnumKeys);
+				enumKeys.AddRange(_enumGenerator.FlagCombinations.Select(combination => combination.Name));
+				var toStringNoBoxSource = _stringEnumGenerator.GenerateNoBoxStringsFromSource(LogChannelsName, enumKeys, NamespaceStr);
+				
+				_sourceFiles.Add(new SourceFile(_capturedEnumCode, "LogChannels.cs"));
+				_sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
+				_currentTab = Tab.SourceCompilation;
 			}
 			_enumGenerator.DrawOutputGUI(showCopyButton: true);
 
@@ -163,16 +236,17 @@ namespace QBS.Editor
 				{
 					_selectedFolderPath = selectedPath;
 					ReadAllFilesInFolder();
+					_currentTab = Tab.EnumGeneration;
 				}
 			}
 
 			EditorGUILayout.Space(10);
 
-			if (_sourceStrings.Count > 0)
+			if (_sourceFiles.Count > 0)
 			{
 				EditorGUILayout.BeginHorizontal();
 				GUILayout.FlexibleSpace();
-				GUILayout.Label($"Read {_sourceStrings.Count} file(s)", EditorStyles.largeLabel);
+				GUILayout.Label($"Read {_sourceFiles.Count} file(s)", EditorStyles.largeLabel);
 				GUILayout.FlexibleSpace();
 				EditorGUILayout.EndHorizontal();
 			}
@@ -186,7 +260,7 @@ namespace QBS.Editor
 
 		private void ReadAllFilesInFolder()
 		{
-			_sourceStrings.Clear();
+			_sourceFiles.Clear();
 			if (string.IsNullOrEmpty(_selectedFolderPath) || !Directory.Exists(_selectedFolderPath))
 			{
 				return;
@@ -204,7 +278,17 @@ namespace QBS.Editor
 			{
 				using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
 				using var reader = new StreamReader(fs);
-				_sourceStrings.Add(reader.ReadToEnd());
+				var sourceContent = reader.ReadToEnd();
+				
+				var fileName = Path.GetFileName(file);
+				var extension = Path.GetExtension(fileName);
+				
+				if (extension != ".cs")
+				{
+					fileName = Path.GetFileNameWithoutExtension(fileName) + ".cs";
+				}
+				
+				_sourceFiles.Add(new SourceFile(sourceContent, fileName));
 			}
 		}
 	}

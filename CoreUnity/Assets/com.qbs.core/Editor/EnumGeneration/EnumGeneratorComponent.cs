@@ -14,24 +14,17 @@ namespace QBS.Core.Editor
 		private BackingType _backingType = BackingType.Int;
 		private EnumTypeOption _enumType = EnumTypeOption.Simple;
 
-		private readonly List<string> _enumKeys = new()
-			{ "Value1", "Value2", "Value3" };
 		private readonly List<CustomValueEntry> _customValues = new()
 		{
 			new CustomValueEntry { Key = "Value1", Value = "10" },
 			new CustomValueEntry { Key = "Value2", Value = "20" },
 			new CustomValueEntry { Key = "Value3", Value = "30" },
 		};
-		private readonly List<FlagCombinationEntry> _flagCombinations = new()
-		{
-			new FlagCombinationEntry { Name = "ReadWrite", Flags = new List<string> { "Read", "Write" } },
-		};
 
 		private ReorderableList _enumKeysList;
 		private ReorderableList _customValuesList;
 		private ReorderableList _flagCombinationsList;
 
-		private string _generatedCode = "";
 		private Vector2 _outputScrollPosition;
 
 		public enum BackingType
@@ -61,17 +54,19 @@ namespace QBS.Core.Editor
 		}
 
 		[Serializable]
-		private class FlagCombinationEntry
+		public class FlagCombinationEntry
 		{
 			public string Name = "";
 			public List<string> Flags = new();
 		}
-		
-		public string GeneratedCode => _generatedCode;
+
+		public string GeneratedCode { get; private set; } = "";
+		public List<string> EnumKeys { get; } = new() { "Value1", "Value2", "Value3" };
+		public List<FlagCombinationEntry> FlagCombinations { get; } = new();
 
 		public void Initialize()
 		{
-			_enumKeysList = new ReorderableList(_enumKeys, typeof(string))
+			_enumKeysList = new ReorderableList(EnumKeys, typeof(string))
 			{
 				drawHeaderCallback = rect =>
 				{
@@ -79,16 +74,16 @@ namespace QBS.Core.Editor
 				},
 				drawElementCallback = (rect, index, _, _) =>
 				{
-					var key = _enumKeys[index];
-					_enumKeys[index] = EditorGUI.TextField(rect, key);
+					var key = EnumKeys[index];
+					EnumKeys[index] = EditorGUI.TextField(rect, key);
 				},
 				onAddCallback = _ =>
 				{
-					_enumKeys.Add("");
+					EnumKeys.Add("");
 				},
 				onRemoveCallback = list =>
 				{
-					_enumKeys.RemoveAt(list.index);
+					EnumKeys.RemoveAt(list.index);
 				},
 			};
 
@@ -124,7 +119,7 @@ namespace QBS.Core.Editor
 				},
 			};
 
-			_flagCombinationsList = new ReorderableList(_flagCombinations, typeof(FlagCombinationEntry), true, true, true, true)
+			_flagCombinationsList = new ReorderableList(FlagCombinations, typeof(FlagCombinationEntry), true, true, true, true)
 			{
 				drawHeaderCallback = rect =>
 				{
@@ -132,13 +127,13 @@ namespace QBS.Core.Editor
 				},
 				elementHeightCallback = index =>
 				{
-					var entry = _flagCombinations[index];
+					var entry = FlagCombinations[index];
 					return EditorGUIUtility.singleLineHeight * 2
 						+ (entry.Flags.Count + 1) * (EditorGUIUtility.singleLineHeight + 2) + 10;
 				},
 				drawElementCallback = (rect, index, _, _) =>
 				{
-					var entry = _flagCombinations[index];
+					var entry = FlagCombinations[index];
 					var y = rect.y + 2;
 
 					EditorGUI.LabelField(new Rect(rect.x, y, 100, EditorGUIUtility.singleLineHeight), "Name:");
@@ -175,7 +170,7 @@ namespace QBS.Core.Editor
 				},
 				onAddCallback = _ =>
 				{
-					_flagCombinations.Add(new FlagCombinationEntry());
+					FlagCombinations.Add(new FlagCombinationEntry());
 				},
 			};
 		}
@@ -226,12 +221,12 @@ namespace QBS.Core.Editor
 
 		public bool DrawGenerateEnumButton()
 		{
-			var pressed = GUILayout.Button("Generate Enum", GUILayout.Height(30)); 
+			var pressed = GUILayout.Button("Generate Enum", GUILayout.Height(30));
 			if (pressed)
 			{
 				GenerateEnum();
 			}
-			
+
 			return pressed;
 		}
 
@@ -245,18 +240,18 @@ namespace QBS.Core.Editor
 
 		public void DrawOutputGUI(bool showCopyButton = true)
 		{
-			if (!string.IsNullOrEmpty(_generatedCode))
+			if (!string.IsNullOrEmpty(GeneratedCode))
 			{
 				EditorGUILayout.Space();
 				GUILayout.Label("Generated Code:", EditorStyles.boldLabel);
 
 				_outputScrollPosition = EditorGUILayout.BeginScrollView(_outputScrollPosition, GUILayout.Height(200));
-				EditorGUILayout.TextArea(_generatedCode, GUILayout.ExpandHeight(true));
+				EditorGUILayout.TextArea(GeneratedCode, GUILayout.ExpandHeight(true));
 				EditorGUILayout.EndScrollView();
 
 				if (showCopyButton && GUILayout.Button("Copy to Clipboard"))
 				{
-					EditorGUIUtility.systemCopyBuffer = _generatedCode;
+					EditorGUIUtility.systemCopyBuffer = GeneratedCode;
 					Debug.Log("Enum code copied to clipboard!");
 				}
 			}
@@ -266,7 +261,7 @@ namespace QBS.Core.Editor
 		{
 			try
 			{
-				_generatedCode = _backingType switch
+				GeneratedCode = _backingType switch
 				{
 					BackingType.Byte => GenerateEnumWithType<byte>(),
 					BackingType.SByte => GenerateEnumWithType<sbyte>(),
@@ -281,7 +276,7 @@ namespace QBS.Core.Editor
 			}
 			catch (Exception ex)
 			{
-				_generatedCode = $"Error generating enum:\n{ex.Message}";
+				GeneratedCode = $"Error generating enum:\n{ex.Message}";
 				Debug.LogError($"Enum generation failed: {ex.Message}\n{ex.StackTrace}");
 			}
 		}
@@ -316,7 +311,7 @@ namespace QBS.Core.Editor
 		{
 			var keys = new HashSet<string>();
 
-			foreach (var key in _enumKeys)
+			foreach (var key in EnumKeys)
 			{
 				var trimmed = key.Trim();
 				if (!string.IsNullOrEmpty(trimmed))
@@ -351,14 +346,14 @@ namespace QBS.Core.Editor
 
 		private Dictionary<string, HashSet<string>> ParseFlagCombinations()
 		{
-			if (_flagCombinations == null || _flagCombinations.Count == 0)
+			if (FlagCombinations == null || FlagCombinations.Count == 0)
 			{
 				return null;
 			}
 
 			var combinations = new Dictionary<string, HashSet<string>>();
 
-			foreach (var entry in _flagCombinations)
+			foreach (var entry in FlagCombinations)
 			{
 				var combinationName = entry.Name.Trim();
 				if (string.IsNullOrEmpty(combinationName))
