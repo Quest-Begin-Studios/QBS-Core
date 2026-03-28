@@ -529,7 +529,9 @@ namespace QBS.Core.Editor
 			}
 			
 			var directory = Path.GetDirectoryName(LogEditorConstants.RuntimeSettingsPath);
-			if (!Directory.Exists(directory))
+			
+			// Calling Directory.CreateDirectory will do nothing if the path already exists.
+			if (directory != null)
 			{
 				Directory.CreateDirectory(directory);
 			}

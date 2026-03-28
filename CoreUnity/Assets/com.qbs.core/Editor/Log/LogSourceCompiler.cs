@@ -9,8 +9,9 @@ namespace QBS.Core.Editor
 {
 	public class LogSourceCompiler : EditorWindow
 	{
-		private const string LogChannelsName = "LogChannel";
 		private const string NamespaceStr = "QBS.Core";
+		private const string LogChannelsName = "LogChannel";
+		private const string AssemblyReferencesJson = "AssemblyReferences.json";
 
 		private enum Tab
 		{
@@ -30,7 +31,7 @@ namespace QBS.Core.Editor
 		private Vector2 _fileListScrollPosition;
 		private List<string> _runtimeAssemblyReferences;
 		private List<string> _editorAssemblyReferences;
-		private List<string> _scriptingSymbols;
+		private List<string> _scriptingSymbols = new() { "ENABLE_LOGS" };
 
 		[MenuItem("Tools/QBS/Logs/Log Source Compiler")]
 		public static void ShowWindow()
@@ -42,10 +43,9 @@ namespace QBS.Core.Editor
 		private void OnEnable()
 		{
 			_sourceFiles = new List<SourceFile>();
-			_scriptingSymbols = new List<string>();
 			_editorAssemblyReferences = new List<string>();
 			_runtimeAssemblyReferences = new List<string>();
-			
+
 			_stringEnumGenerator = new StringEnumGenerator();
 			InitializeAndConfigureEnumGenerator();
 		}
@@ -207,8 +207,8 @@ namespace QBS.Core.Editor
 			EditorGUI.EndDisabledGroup();
 
 			_enumGenerator.DrawEnumListGUI();
-			
-			if(GUILayout.Button("Generate Enum", GUILayout.Height(30)))
+
+			if (GUILayout.Button("Generate Enum", GUILayout.Height(30)))
 			{
 				var enumGenSuccess = _enumGenerator.GenerateEnum();
 
@@ -217,7 +217,7 @@ namespace QBS.Core.Editor
 					_capturedEnumCode = _enumGenerator.GeneratedCode;
 					//Also generate the relevant ToStringNoBox methods:
 					GenerateEnumHelpers();
-					
+
 					_currentTab = Tab.SourceCompilation;
 				}
 			}
@@ -274,7 +274,7 @@ namespace QBS.Core.Editor
 
 			EditorGUILayout.Space(5);
 
-			if (GUILayout.Button("Select Folder", GUILayout.Height(30)))
+			if (GUILayout.Button("Select Source Folder", GUILayout.Height(30)))
 			{
 				var selectedPath = EditorUtility.OpenFolderPanel("Select Folder to Crawl for Source Files", _selectedFolderPath, "");
 				if (!string.IsNullOrEmpty(selectedPath))
@@ -338,31 +338,34 @@ namespace QBS.Core.Editor
 			}
 
 			// Read JSON file for assembly references
-			var jsonFile = Path.Combine(_selectedFolderPath, "AssemblyReferences.json");
-			if (File.Exists(jsonFile))
+			var jsonFile = Path.Combine(_selectedFolderPath, AssemblyReferencesJson);
+			if (!File.Exists(jsonFile))
 			{
-				try
+				Debug.LogWarning($"AssemblyReferences.json not found at: {jsonFile}");
+				return;
+			}
+			
+			try
+			{
+				var jsonContent = File.ReadAllText(jsonFile);
+				var assemblyReferences = JsonUtility.FromJson<AssemblyReferencesData>(jsonContent);
+				if (assemblyReferences != null)
 				{
-					var jsonContent = File.ReadAllText(jsonFile);
-					var assemblyReferences = JsonUtility.FromJson<AssemblyReferencesData>(jsonContent);
-					if (assemblyReferences != null)
+					if (assemblyReferences.RuntimeAssemblies is { Length: > 0 })
 					{
-						if (assemblyReferences.RuntimeAssemblies is { Length: > 0 })
-						{
-							_runtimeAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.RuntimeAssemblies));
-							Debug.Log($"Loaded {assemblyReferences.RuntimeAssemblies.Length} runtime assembly references");
-						}
-						if (assemblyReferences.EditorAssemblies is { Length: > 0 })
-						{
-							_editorAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.EditorAssemblies));
-							Debug.Log($"Loaded {assemblyReferences.EditorAssemblies.Length} editor assembly references");
-						}
+						_runtimeAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.RuntimeAssemblies));
+						Debug.Log($"Loaded {assemblyReferences.RuntimeAssemblies.Length} runtime assembly references");
+					}
+					if (assemblyReferences.EditorAssemblies is { Length: > 0 })
+					{
+						_editorAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.EditorAssemblies));
+						Debug.Log($"Loaded {assemblyReferences.EditorAssemblies.Length} editor assembly references");
 					}
 				}
-				catch (Exception e)
-				{
-					Debug.LogWarning($"Failed to parse AssemblyReferences.json: {e.Message}");
-				}
+			}
+			catch (Exception e)
+			{
+				Debug.LogWarning($"Failed to parse AssemblyReferences.json: {e.Message}");
 			}
 		}
 

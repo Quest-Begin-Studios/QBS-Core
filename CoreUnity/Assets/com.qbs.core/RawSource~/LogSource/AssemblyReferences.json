@@ -1,12 +1,20 @@
 {
     "RuntimeAssemblies": [
         "mscorlib",
-        "UnityEngine"
+        "netstandard",
+        "UnityEngine",
+        "UnityEngine.CoreModule"
     ],
     "EditorAssemblies": [
+        "Log.Runtime",
         "mscorlib",
+        "netstandard",
         "System.Core",
         "UnityEditor",
-        "UnityEngine"
+        "UnityEditor.CoreModule",
+        "UnityEngine",
+        "UnityEngine.CoreModule",
+        "UnityEngine.IMGUIModule",
+        "UnityEngine.TextRenderingModule"
     ]
 }

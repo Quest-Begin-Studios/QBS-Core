@@ -5,52 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
-using UnityEngine;
 
 namespace QBS.Core.Editor
 {
 	public class DLLGenerator : IDisposable
 	{
-		private const string NetstandardAssemblyName = "netstandard";
-		private List<string> _assembliesToReference;
-
-		private static readonly string[] CommonRuntimeAssembliesPath =
-		{
-			typeof(object).Assembly.Location,
-			typeof(GameObject).Assembly.Location,
-		};
-
-		private static readonly string[] CommonEditorAssembliesPath =
-		{
-			typeof(object).Assembly.Location,
-			typeof(GameObject).Assembly.Location,
-			typeof(GUIStyle).Assembly.Location,
-			typeof(UnityEditor.Editor).Assembly.Location,
-		};
-
-		public DLLGenerator(bool isRuntimeSourceCompiler)
-		{
-			_assembliesToReference = new List<string>();
-			_assembliesToReference.AddRange(isRuntimeSourceCompiler ? CommonRuntimeAssembliesPath : CommonEditorAssembliesPath);
-
-			Assembly netStandardAssembly = null;
-			foreach (var assembly in AssemblyUtilities.GetLoadedAssemblies())
-			{
-				if (assembly.FullName.Contains(NetstandardAssemblyName, StringComparison.InvariantCultureIgnoreCase))
-				{
-					netStandardAssembly = assembly;
-					break;
-				}
-			}
-
-			if (netStandardAssembly == null)
-			{
-				throw new Exception($"Could not find assembly {NetstandardAssemblyName}! Where are you operating?");
-			}
-			_assembliesToReference.Add(netStandardAssembly.Location);
-		}
+		private List<string> _assembliesToReference = new();
 
 		public bool GenerateDLL(DLLGenerationParameters genParams)
 		{
@@ -69,17 +30,17 @@ namespace QBS.Core.Editor
 			var parseOptions = CSharpParseOptions.Default
 				.WithLanguageVersion(LanguageVersion.CSharp9)
 				.WithPreprocessorSymbols(genParams.ScriptingSymbols);
-			
+
 			foreach (var sourceFile in genParams.Sources)
 			{
 				var syntaxTree = CSharpSyntaxTree.ParseText
 				(
-					sourceFile.SourceContent, 
+					sourceFile.SourceContent,
 					parseOptions,
 					sourceFile.FilePath,
 					Encoding.UTF8
 				);
-				
+
 				syntaxTrees.Add(syntaxTree);
 			}
 

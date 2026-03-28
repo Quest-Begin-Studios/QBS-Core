@@ -46,8 +46,6 @@ namespace QBS.Core.Editor
 				extraAssembliesToReference = new List<string>
 				{
 					GetPathForDLL(true, dllName, pathToPluginsFolder),
-					typeof(FontStyle).Assembly.Location,
-					typeof(Enumerable).Assembly.Location,
 				};
 				if (editorAssemblyReferences != null)
 				{
@@ -130,7 +128,7 @@ namespace QBS.Core.Editor
 
 			var generationParameters = new DLLGenerationParameters(sources, pathToDLL, extraReferenceAssemblies, scriptingSymbols);
 
-			var dllGenerator = new DLLGenerator(compileForRuntime);
+			var dllGenerator = new DLLGenerator();
 			return dllGenerator.GenerateDLL(generationParameters);
 		}
 

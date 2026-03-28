@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 77fc2191a27763f40a9f21171504ef20
+guid: d410ea86c97d4be46a814ae74d72b580
 PluginImporter:
   externalObjects: {}
   serializedVersion: 3
@@ -11,12 +11,6 @@ PluginImporter:
   isExplicitlyReferenced: 0
   validateReferences: 1
   platformData:
-    Android:
-      enabled: 0
-      settings:
-        AndroidLibraryDependee: UnityLibrary
-        AndroidSharedLibraryType: Executable
-        CPU: ARMv7
     Any:
       enabled: 0
       settings:
@@ -30,9 +24,7 @@ PluginImporter:
     Editor:
       enabled: 1
       settings:
-        CPU: AnyCPU
         DefaultValueInitialized: true
-        OS: AnyOS
     Linux64:
       enabled: 0
       settings:
