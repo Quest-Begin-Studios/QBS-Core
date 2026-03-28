@@ -12,32 +12,24 @@ namespace QBS.Core.Editor
 		private const string NamespaceStr = "QBS.Core";
 		private const string LogChannelsName = "LogChannel";
 		private const string AssemblyReferencesJson = "AssemblyReferences.json";
-
-		private enum Tab
-		{
-			SourceFetch,
-			EnumGeneration,
-			SourceCompilation,
-		}
+		private const string RawSourceFolderPath = @"Assets\com.qbs.core\RawSource~\LogSource";
 
 		private EnumGeneratorComponent _enumGenerator;
 		private StringEnumGenerator _stringEnumGenerator;
-		private Tab _currentTab;
 		private Vector2 _scrollPosition;
-		private string _selectedFolderPath = "";
+		private Vector2 _enumScrollPosition;
 
 		private List<SourceFile> _sourceFiles;
 		private string _capturedEnumCode = "";
-		private Vector2 _fileListScrollPosition;
 		private List<string> _runtimeAssemblyReferences;
 		private List<string> _editorAssemblyReferences;
-		private List<string> _scriptingSymbols = new() { "ENABLE_LOGS" };
+		private readonly List<string> _scriptingSymbols = new() { "ENABLE_LOGS" };
 
 		[MenuItem("Tools/QBS/Logs/Log Source Compiler")]
 		public static void ShowWindow()
 		{
 			var window = GetWindow<LogSourceCompiler>("Log Source Compiler");
-			window.minSize = new Vector2(600, 500);
+			window.minSize = new Vector2(600, 1050);
 		}
 
 		private void OnEnable()
@@ -78,71 +70,56 @@ namespace QBS.Core.Editor
 			_capturedEnumCode = "";
 			_runtimeAssemblyReferences = null;
 			_editorAssemblyReferences = null;
-			_scriptingSymbols = null;
 		}
 
 		private void OnGUI()
 		{
 			GUILayout.Label("Log Source Compiler", EditorStyles.largeLabel);
-
 			EditorGUILayout.Space(5);
 
-			DrawTabBar();
-
-			EditorGUILayout.Space(10);
-
-			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
-
-			switch (_currentTab)
-			{
-				case Tab.SourceFetch:
-				{
-					DrawSourceFetchTab();
-					break;
-				}
-				case Tab.EnumGeneration:
-				{
-					DrawEnumGenerationTab();
-					break;
-				}
-				case Tab.SourceCompilation:
-				{
-					DrawSourceCompilationTab();
-					break;
-				}
-			}
-
-			EditorGUILayout.EndScrollView();
-		}
-
-		private void DrawSourceCompilationTab()
-		{
 			EditorGUILayout.BeginVertical("box");
-			GUILayout.Label("Scripting Symbols", EditorStyles.boldLabel);
-			EditorGUILayout.Space(5);
-
-			for (var i = 0; i < _scriptingSymbols.Count; i++)
-			{
-				EditorGUILayout.BeginHorizontal();
-				_scriptingSymbols[i] = EditorGUILayout.TextField($"Symbol {i + 1}", _scriptingSymbols[i]);
-				if (GUILayout.Button("Remove", GUILayout.Width(70)))
-				{
-					_scriptingSymbols.RemoveAt(i);
-					break;
-				}
-				EditorGUILayout.EndHorizontal();
-			}
-
-			if (GUILayout.Button("Add Scripting Symbol", GUILayout.Height(25)))
-			{
-				_scriptingSymbols.Add("");
-			}
+			EditorGUILayout.LabelField("Instructions", EditorStyles.boldLabel);
+			var helpBoxStyle = new GUIStyle(EditorStyles.helpBox);
+			helpBoxStyle.fontSize = 13;
+			helpBoxStyle.padding = new RectOffset(10, 10, 10, 10);
+			EditorGUILayout.LabelField(
+				"This tool compiles log sources into a DLL.\n\n" +
+				"Steps:\n" +
+				"1. Configure and add LogChannel enum keys below\n" +
+				"2. Click 'Generate Enum' to create the enum and read sources from RawSource~ folder\n" +
+				"3. Click 'Generate DLL' to compile the final DLL\n\n" +
+				"Output: The compiled DLL will be placed in the Plugins folder.",
+				helpBoxStyle);
 			EditorGUILayout.EndVertical();
 
 			EditorGUILayout.Space(10);
 
-			if (GUILayout.Button("Compile", GUILayout.Height(50)))
+			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
+			
+			if (!string.IsNullOrEmpty(_capturedEnumCode))
 			{
+				EditorGUILayout.Space(20);
+				DrawDLLGenerationSection();
+			}
+
+			DrawEnumGenerationSection();
+
+			EditorGUILayout.EndScrollView();
+		}
+
+		private void DrawDLLGenerationSection()
+		{
+			EditorGUILayout.BeginVertical("box");
+			GUILayout.Label("DLL Generation", EditorStyles.boldLabel);
+			EditorGUILayout.Space(5);
+			EditorGUILayout.HelpBox("Enum generated successfully! Click below to compile the DLL.\nScripting symbols: ENABLE_LOGS", MessageType.Info);
+			EditorGUILayout.Space(10);
+
+			var originalColor = GUI.backgroundColor;
+			GUI.backgroundColor = new Color(0.5f, 1f, 0.5f);
+			if (GUILayout.Button("Generate DLL", GUILayout.Height(50)))
+			{
+				GUI.backgroundColor = originalColor;
 				var dllGenerationSuccess = DLLGenerationHelper.TryGeneratingDLL
 				(
 					_sourceFiles,
@@ -159,42 +136,12 @@ namespace QBS.Core.Editor
 					AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 					EditorUtility.RequestScriptReload();
 				}
-
 			}
+			GUI.backgroundColor = originalColor;
+			EditorGUILayout.EndVertical();
 		}
 
-		private void DrawTabBar()
-		{
-			if (_sourceFiles == null || _sourceFiles.Count == 0)
-			{
-				_currentTab = Tab.SourceFetch;
-				return;
-			}
-
-			EditorGUILayout.BeginHorizontal();
-
-			if (GUILayout.Toggle(_currentTab == Tab.SourceFetch, "Fetch Source", EditorStyles.toolbarButton))
-			{
-				_currentTab = Tab.SourceFetch;
-			}
-
-			if (GUILayout.Toggle(_currentTab == Tab.EnumGeneration, "Enum Generation", EditorStyles.toolbarButton))
-			{
-				_currentTab = Tab.EnumGeneration;
-			}
-
-			if (!string.IsNullOrEmpty(_capturedEnumCode))
-			{
-				if (GUILayout.Toggle(_currentTab == Tab.SourceCompilation, "Source Generation", EditorStyles.toolbarButton))
-				{
-					_currentTab = Tab.SourceCompilation;
-				}
-			}
-
-			EditorGUILayout.EndHorizontal();
-		}
-
-		private void DrawEnumGenerationTab()
+		private void DrawEnumGenerationSection()
 		{
 			EditorGUILayout.BeginVertical("box");
 			GUILayout.Label("Enum Generation", EditorStyles.boldLabel);
@@ -202,14 +149,22 @@ namespace QBS.Core.Editor
 			EditorGUILayout.HelpBox("Create the LogChannel enum here.", MessageType.Info);
 			EditorGUILayout.Space();
 
+			_enumScrollPosition = EditorGUILayout.BeginScrollView(_enumScrollPosition, GUILayout.Height(500));
+
 			EditorGUI.BeginDisabledGroup(true);
 			_enumGenerator.DrawConfigurationGUI();
 			EditorGUI.EndDisabledGroup();
 
 			_enumGenerator.DrawEnumListGUI();
 
+			EditorGUILayout.EndScrollView();
+
+			EditorGUILayout.Space(5);
+
 			if (GUILayout.Button("Generate Enum", GUILayout.Height(30)))
 			{
+				ReadSourcesFromRawSourceFolder();
+				
 				var enumGenSuccess = _enumGenerator.GenerateEnum();
 
 				if (enumGenSuccess)
@@ -217,8 +172,6 @@ namespace QBS.Core.Editor
 					_capturedEnumCode = _enumGenerator.GeneratedCode;
 					//Also generate the relevant ToStringNoBox methods:
 					GenerateEnumHelpers();
-
-					_currentTab = Tab.SourceCompilation;
 				}
 			}
 			_enumGenerator.DrawOutputGUI(showCopyButton: true);
@@ -257,68 +210,35 @@ namespace QBS.Core.Editor
 			_sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
 		}
 
-		private void DrawSourceFetchTab()
-		{
-			EditorGUILayout.BeginVertical("box");
-			GUILayout.Label("Source Compilation", EditorStyles.boldLabel);
-			EditorGUILayout.Space();
-
-			EditorGUILayout.HelpBox("Configure and compile log sources here.", MessageType.Info);
-
-			EditorGUILayout.Space(10);
-
-			EditorGUILayout.BeginHorizontal();
-			EditorGUILayout.LabelField("Selected Folder:", GUILayout.Width(100));
-			EditorGUILayout.LabelField(string.IsNullOrEmpty(_selectedFolderPath) ? "None" : _selectedFolderPath);
-			EditorGUILayout.EndHorizontal();
-
-			EditorGUILayout.Space(5);
-
-			if (GUILayout.Button("Select Source Folder", GUILayout.Height(30)))
-			{
-				var selectedPath = EditorUtility.OpenFolderPanel("Select Folder to Crawl for Source Files", _selectedFolderPath, "");
-				if (!string.IsNullOrEmpty(selectedPath))
-				{
-					_selectedFolderPath = selectedPath;
-					ReadAllFilesInFolder();
-					_currentTab = Tab.EnumGeneration;
-				}
-			}
-
-			EditorGUILayout.Space(10);
-
-			if (_sourceFiles.Count > 0)
-			{
-				EditorGUILayout.BeginHorizontal();
-				GUILayout.FlexibleSpace();
-				GUILayout.Label($"Read {_sourceFiles.Count} file(s)", EditorStyles.largeLabel);
-				GUILayout.FlexibleSpace();
-				EditorGUILayout.EndHorizontal();
-			}
-			else if (!string.IsNullOrEmpty(_selectedFolderPath))
-			{
-				EditorGUILayout.HelpBox("No .cs or .txt files found in the selected folder.", MessageType.Warning);
-			}
-
-			EditorGUILayout.EndVertical();
-		}
-
-		private void ReadAllFilesInFolder()
+		private void ReadSourcesFromRawSourceFolder()
 		{
 			_sourceFiles.Clear();
 			_runtimeAssemblyReferences.Clear();
 			_editorAssemblyReferences.Clear();
-			if (string.IsNullOrEmpty(_selectedFolderPath) || !Directory.Exists(_selectedFolderPath))
+			
+			var packagePath = "Packages/com.qbs.core";
+			var rawSourceFolder = Path.Combine(packagePath, "RawSource~");
+			
+			if (!Directory.Exists(rawSourceFolder))
 			{
-				return;
+				Debug.LogWarning($"RawSource~ folder not found at package path: {rawSourceFolder}");
+				rawSourceFolder = RawSourceFolderPath;
+				
+				if (!Directory.Exists(rawSourceFolder))
+				{
+					Debug.LogError($"RawSource~ folder not found at fallback path: {rawSourceFolder}");
+					return;
+				}
+				
+				Debug.Log($"Using fallback RawSource~ folder at: {rawSourceFolder}");
 			}
 
 			var fileList = new List<string>();
 
-			var csFiles = Directory.GetFiles(_selectedFolderPath, "*.cs", SearchOption.AllDirectories);
+			var csFiles = Directory.GetFiles(rawSourceFolder, "*.cs", SearchOption.AllDirectories);
 			fileList.AddRange(csFiles);
 
-			var txtFiles = Directory.GetFiles(_selectedFolderPath, "*.txt", SearchOption.AllDirectories);
+			var txtFiles = Directory.GetFiles(rawSourceFolder, "*.txt", SearchOption.AllDirectories);
 			fileList.AddRange(txtFiles);
 
 			foreach (var file in fileList)
@@ -338,7 +258,7 @@ namespace QBS.Core.Editor
 			}
 
 			// Read JSON file for assembly references
-			var jsonFile = Path.Combine(_selectedFolderPath, AssemblyReferencesJson);
+			var jsonFile = Path.Combine(rawSourceFolder, AssemblyReferencesJson);
 			if (!File.Exists(jsonFile))
 			{
 				Debug.LogWarning($"AssemblyReferences.json not found at: {jsonFile}");
