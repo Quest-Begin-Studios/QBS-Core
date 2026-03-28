@@ -6,7 +6,6 @@ namespace QBS.Core.Editor
 	{
 		public static readonly List<string> BaseKeys = new()
 		{
-			"None",
 			"Network",
 			"AI",
 			"Physics",
