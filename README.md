@@ -4,7 +4,7 @@
 
 ## Overview
 
-QBS-Core is a dependency-free Unity package that provides essential development tools for building Unity projects. It includes powerful code generation systems, DLL compilation utilities, and logging infrastructure.
+QBS-Core provides essential development tools for building Unity projects. It includes powerful code generation systems, DLL compilation utilities, and logging infrastructure.
 
 ## Features
 
