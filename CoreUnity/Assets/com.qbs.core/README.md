@@ -53,7 +53,7 @@ Helper methods for working with Unity assemblies and reflection.
 
 1. Open Unity Package Manager (`Window > Package Manager`)
 2. Click `+` → `Add package from git URL`
-3. Enter: `https://github.com/YOUR_USERNAME/com.qbs.core.git`
+3. Enter: `https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core`
 
 ### Via manifest.json
 
@@ -62,7 +62,7 @@ Add to your `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.qbs.core": "https://github.com/YOUR_USERNAME/com.qbs.core.git#v1.0.0"
+    "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.0.0"
   }
 }
 ```
@@ -149,7 +149,7 @@ com.qbs.core/
 ## Support
 
 - **Email**: questbeginstudios@gmail.com
-- **Issues**: [GitHub Issues](https://github.com/YOUR_USERNAME/com.qbs.core/issues)
+- **Issues**: [GitHub Issues](https://github.com/QuestBeginStudios/QBS-Core/issues)
 
 ## License
 
