@@ -1,4 +1,3 @@
-using QBS.Core.Editor;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,7 +5,7 @@ using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
-namespace QBS.Editor
+namespace QBS.Core.Editor
 {
 	public class LogSourceCompiler : EditorWindow
 	{
@@ -29,6 +28,9 @@ namespace QBS.Editor
 		private List<SourceFile> _sourceFiles;
 		private string _capturedEnumCode = "";
 		private Vector2 _fileListScrollPosition;
+		private List<string> _runtimeAssemblyReferences;
+		private List<string> _editorAssemblyReferences;
+		private List<string> _scriptingSymbols;
 
 		[MenuItem("Tools/QBS/Logs/Log Source Compiler")]
 		public static void ShowWindow()
@@ -40,7 +42,18 @@ namespace QBS.Editor
 		private void OnEnable()
 		{
 			_sourceFiles = new List<SourceFile>();
+			_scriptingSymbols = new List<string>();
+			_editorAssemblyReferences = new List<string>();
+			_runtimeAssemblyReferences = new List<string>();
+			
+			_stringEnumGenerator = new StringEnumGenerator();
+			InitializeAndConfigureEnumGenerator();
+		}
+
+		private void InitializeAndConfigureEnumGenerator()
+		{
 			_enumGenerator = new EnumGeneratorComponent();
+
 			_enumGenerator.Initialize();
 			_enumGenerator.ConfigureEnumProperties
 			(
@@ -49,14 +62,23 @@ namespace QBS.Editor
 				EnumGeneratorComponent.EnumTypeOption.Flags,
 				EnumGeneratorComponent.BackingType.Int
 			);
-			_stringEnumGenerator = new StringEnumGenerator();
+			_enumGenerator.ConfigureEnumKeys
+			(
+				LogChannelDefaults.BaseKeys,
+				LogChannelDefaults.FlagCombinations
+			);
 		}
 
 		private void OnDisable()
 		{
 			_sourceFiles = null;
 			_enumGenerator = null;
+			_stringEnumGenerator = null;
+
 			_capturedEnumCode = "";
+			_runtimeAssemblyReferences = null;
+			_editorAssemblyReferences = null;
+			_scriptingSymbols = null;
 		}
 
 		private void OnGUI()
@@ -95,38 +117,50 @@ namespace QBS.Editor
 
 		private void DrawSourceCompilationTab()
 		{
+			EditorGUILayout.BeginVertical("box");
+			GUILayout.Label("Scripting Symbols", EditorStyles.boldLabel);
+			EditorGUILayout.Space(5);
+
+			for (var i = 0; i < _scriptingSymbols.Count; i++)
+			{
+				EditorGUILayout.BeginHorizontal();
+				_scriptingSymbols[i] = EditorGUILayout.TextField($"Symbol {i + 1}", _scriptingSymbols[i]);
+				if (GUILayout.Button("Remove", GUILayout.Width(70)))
+				{
+					_scriptingSymbols.RemoveAt(i);
+					break;
+				}
+				EditorGUILayout.EndHorizontal();
+			}
+
+			if (GUILayout.Button("Add Scripting Symbol", GUILayout.Height(25)))
+			{
+				_scriptingSymbols.Add("");
+			}
+			EditorGUILayout.EndVertical();
+
+			EditorGUILayout.Space(10);
+
 			if (GUILayout.Button("Compile", GUILayout.Height(50)))
 			{
-				try
-				{
-					WriteSourceFilesToTemp();
-					DLLGenerationHelper.TryGeneratingDLL(_sourceFiles, "Log", "Log");
-				}
-				catch (Exception e)
-				{
-					Debug.LogException(e);
-				}
-			}
-		}
+				var dllGenerationSuccess = DLLGenerationHelper.TryGeneratingDLL
+				(
+					_sourceFiles,
+					"Log",
+					"Log",
+					_runtimeAssemblyReferences,
+					_editorAssemblyReferences,
+					_scriptingSymbols
+				);
 
-		private void WriteSourceFilesToTemp()
-		{
-			var tempPath = Path.Combine(Path.GetTempPath(), "QBS_LogSourceCompilation");
-			
-			if (Directory.Exists(tempPath))
-			{
-				Directory.Delete(tempPath, true);
+				if (dllGenerationSuccess)
+				{
+					AssetDatabase.SaveAssets();
+					AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+					EditorUtility.RequestScriptReload();
+				}
+
 			}
-			
-			Directory.CreateDirectory(tempPath);
-			
-			foreach (var sourceFile in _sourceFiles)
-			{
-				var filePath = Path.Combine(tempPath, sourceFile.FilePath);
-				File.WriteAllText(filePath, sourceFile.SourceContent);
-			}
-			
-			Debug.Log($"Source files written to: {tempPath}");
 		}
 
 		private void DrawTabBar()
@@ -136,7 +170,7 @@ namespace QBS.Editor
 				_currentTab = Tab.SourceFetch;
 				return;
 			}
-			
+
 			EditorGUILayout.BeginHorizontal();
 
 			if (GUILayout.Toggle(_currentTab == Tab.SourceFetch, "Fetch Source", EditorStyles.toolbarButton))
@@ -173,19 +207,19 @@ namespace QBS.Editor
 			EditorGUI.EndDisabledGroup();
 
 			_enumGenerator.DrawEnumListGUI();
-			if (_enumGenerator.DrawGenerateEnumButton())
+			
+			if(GUILayout.Button("Generate Enum", GUILayout.Height(30)))
 			{
-				_capturedEnumCode = _enumGenerator.GeneratedCode;
-				
-				//Also generate the relevant ToStringNoBox methods:
-				var enumKeys = new List<string>();
-				enumKeys.AddRange(_enumGenerator.EnumKeys);
-				enumKeys.AddRange(_enumGenerator.FlagCombinations.Select(combination => combination.Name));
-				var toStringNoBoxSource = _stringEnumGenerator.GenerateNoBoxStringsFromSource(LogChannelsName, enumKeys, NamespaceStr);
-				
-				_sourceFiles.Add(new SourceFile(_capturedEnumCode, "LogChannels.cs"));
-				_sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
-				_currentTab = Tab.SourceCompilation;
+				var enumGenSuccess = _enumGenerator.GenerateEnum();
+
+				if (enumGenSuccess)
+				{
+					_capturedEnumCode = _enumGenerator.GeneratedCode;
+					//Also generate the relevant ToStringNoBox methods:
+					GenerateEnumHelpers();
+					
+					_currentTab = Tab.SourceCompilation;
+				}
 			}
 			_enumGenerator.DrawOutputGUI(showCopyButton: true);
 
@@ -210,6 +244,17 @@ namespace QBS.Editor
 
 				EditorGUILayout.EndVertical();
 			}
+		}
+
+		private void GenerateEnumHelpers()
+		{
+			var enumKeys = new List<string>();
+			enumKeys.AddRange(_enumGenerator.EnumKeys);
+			enumKeys.AddRange(_enumGenerator.FlagCombinations.Select(combination => combination.Name));
+			var toStringNoBoxSource = _stringEnumGenerator.GenerateNoBoxStringsFromSource(LogChannelsName, enumKeys, NamespaceStr);
+
+			_sourceFiles.Add(new SourceFile(_capturedEnumCode, "LogChannels.cs"));
+			_sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
 		}
 
 		private void DrawSourceFetchTab()
@@ -261,35 +306,98 @@ namespace QBS.Editor
 		private void ReadAllFilesInFolder()
 		{
 			_sourceFiles.Clear();
+			_runtimeAssemblyReferences.Clear();
+			_editorAssemblyReferences.Clear();
 			if (string.IsNullOrEmpty(_selectedFolderPath) || !Directory.Exists(_selectedFolderPath))
 			{
 				return;
 			}
 
 			var fileList = new List<string>();
-			
+
 			var csFiles = Directory.GetFiles(_selectedFolderPath, "*.cs", SearchOption.AllDirectories);
 			fileList.AddRange(csFiles);
 
 			var txtFiles = Directory.GetFiles(_selectedFolderPath, "*.txt", SearchOption.AllDirectories);
 			fileList.AddRange(txtFiles);
-			
+
 			foreach (var file in fileList)
 			{
-				using var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read);
-				using var reader = new StreamReader(fs);
+				using var reader = new StreamReader(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read));
 				var sourceContent = reader.ReadToEnd();
-				
+
 				var fileName = Path.GetFileName(file);
 				var extension = Path.GetExtension(fileName);
-				
+
 				if (extension != ".cs")
 				{
 					fileName = Path.GetFileNameWithoutExtension(fileName) + ".cs";
 				}
-				
+
 				_sourceFiles.Add(new SourceFile(sourceContent, fileName));
 			}
+
+			// Read JSON file for assembly references
+			var jsonFile = Path.Combine(_selectedFolderPath, "AssemblyReferences.json");
+			if (File.Exists(jsonFile))
+			{
+				try
+				{
+					var jsonContent = File.ReadAllText(jsonFile);
+					var assemblyReferences = JsonUtility.FromJson<AssemblyReferencesData>(jsonContent);
+					if (assemblyReferences != null)
+					{
+						if (assemblyReferences.RuntimeAssemblies is { Length: > 0 })
+						{
+							_runtimeAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.RuntimeAssemblies));
+							Debug.Log($"Loaded {assemblyReferences.RuntimeAssemblies.Length} runtime assembly references");
+						}
+						if (assemblyReferences.EditorAssemblies is { Length: > 0 })
+						{
+							_editorAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.EditorAssemblies));
+							Debug.Log($"Loaded {assemblyReferences.EditorAssemblies.Length} editor assembly references");
+						}
+					}
+				}
+				catch (Exception e)
+				{
+					Debug.LogWarning($"Failed to parse AssemblyReferences.json: {e.Message}");
+				}
+			}
+		}
+
+		private List<string> ResolveAssemblyPaths(string[] assemblyNames)
+		{
+			var resolvedPaths = new List<string>();
+			var loadedAssemblies = AssemblyUtilities.GetLoadedAssemblies();
+
+			foreach (var assemblyName in assemblyNames)
+			{
+				var assembly = loadedAssemblies.FirstOrDefault
+				(a =>
+					a.GetName().Name.Equals(assemblyName, StringComparison.InvariantCultureIgnoreCase)
+				);
+
+				if (assembly != null)
+				{
+					resolvedPaths.Add(assembly.Location);
+					Debug.Log($"Resolved assembly '{assemblyName}' to: {assembly.Location}");
+				}
+				else
+				{
+					Debug.LogWarning($"Could not resolve assembly: {assemblyName}");
+				}
+			}
+
+			return resolvedPaths;
+		}
+
+		[Serializable]
+		private class AssemblyReferencesData
+		{
+			public string[] RuntimeAssemblies;
+			public string[] EditorAssemblies;
 		}
 	}
+
 }

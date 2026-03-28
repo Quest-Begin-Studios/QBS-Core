@@ -5,7 +5,7 @@ namespace QBS.Core.Editor
 {
 	public static class LogEditorMenu
 	{
-		private const string MenuRoot = "Tools/QBS/Logging/";
+		private const string MenuRoot = "Tools/QBS/Logs/";
 		private const string ConfigureMenu = MenuRoot + "Configure Logging";
 
 		[MenuItem(ConfigureMenu, false, 1)]
@@ -47,7 +47,7 @@ namespace QBS.Core.Editor
 			{
 				return;
 			}
-			
+
 			Debug.LogError
 			(
 				"QBS Logging is disabled. Enable it in the "
@@ -59,11 +59,6 @@ namespace QBS.Core.Editor
 
 		}
 
-		private static void RestoreActiveLogChannels()
-		{
-			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, ~0);
-		}
-
 		private static void RestoreMinimumLogLevel()
 		{
 			if (EditorPrefs.HasKey(LogEditorConstants.MinimumLevel))
@@ -71,6 +66,15 @@ namespace QBS.Core.Editor
 				var level = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel);
 				Log.MinimumLevel = level;
 			}
+			else
+			{
+				Log.MinimumLevel = LogLevel.Trace;
+			}
+		}
+
+		private static void RestoreActiveLogChannels()
+		{
+			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, ~0);
 		}
 
 		private static void OnQuit()

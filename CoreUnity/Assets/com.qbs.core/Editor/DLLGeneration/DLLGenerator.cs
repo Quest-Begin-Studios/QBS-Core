@@ -5,39 +5,93 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
-using Object = UnityEngine.Object;
+using UnityEngine;
 
-namespace QBS.Editor
+namespace QBS.Core.Editor
 {
-
-	public static class DLLGenerator
+	public class DLLGenerator : IDisposable
 	{
-		public static bool GenerateDLL(DLLGenerationParameters genParams)
+		private const string NetstandardAssemblyName = "netstandard";
+		private List<string> _assembliesToReference;
+
+		private static readonly string[] CommonRuntimeAssembliesPath =
+		{
+			typeof(object).Assembly.Location,
+			typeof(GameObject).Assembly.Location,
+		};
+
+		private static readonly string[] CommonEditorAssembliesPath =
+		{
+			typeof(object).Assembly.Location,
+			typeof(GameObject).Assembly.Location,
+			typeof(GUIStyle).Assembly.Location,
+			typeof(UnityEditor.Editor).Assembly.Location,
+		};
+
+		public DLLGenerator(bool isRuntimeSourceCompiler)
+		{
+			_assembliesToReference = new List<string>();
+			_assembliesToReference.AddRange(isRuntimeSourceCompiler ? CommonRuntimeAssembliesPath : CommonEditorAssembliesPath);
+
+			Assembly netStandardAssembly = null;
+			foreach (var assembly in AssemblyUtilities.GetLoadedAssemblies())
+			{
+				if (assembly.FullName.Contains(NetstandardAssemblyName, StringComparison.InvariantCultureIgnoreCase))
+				{
+					netStandardAssembly = assembly;
+					break;
+				}
+			}
+
+			if (netStandardAssembly == null)
+			{
+				throw new Exception($"Could not find assembly {NetstandardAssemblyName}! Where are you operating?");
+			}
+			_assembliesToReference.Add(netStandardAssembly.Location);
+		}
+
+		public bool GenerateDLL(DLLGenerationParameters genParams)
 		{
 			if (genParams.Sources == null || genParams.Sources.Count == 0)
 			{
 				throw new ArgumentException("Sources Array is null or empty");
 			}
 
+			if (genParams.ExtraAssembliesToReference != null)
+			{
+				_assembliesToReference.AddRange(genParams.ExtraAssembliesToReference);
+			}
+
 			// Parse all source code into syntax trees
 			var syntaxTrees = new List<SyntaxTree>();
+			var parseOptions = CSharpParseOptions.Default
+				.WithLanguageVersion(LanguageVersion.CSharp9)
+				.WithPreprocessorSymbols(genParams.ScriptingSymbols);
+			
 			foreach (var sourceFile in genParams.Sources)
 			{
-				var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp9);
-				var syntaxTree = CSharpSyntaxTree.ParseText(sourceFile.SourceContent, parseOptions, sourceFile.FilePath, Encoding.UTF8);
+				var syntaxTree = CSharpSyntaxTree.ParseText
+				(
+					sourceFile.SourceContent, 
+					parseOptions,
+					sourceFile.FilePath,
+					Encoding.UTF8
+				);
+				
 				syntaxTrees.Add(syntaxTree);
 			}
 
 			// Automatically resolve assembly references from loaded assemblies
-			var references = ResolveAssemblyReferences(genParams.Sources, genParams.IsSourceForEditor);
+			var references = ResolveAssemblyReferences();
 
 			// Determine assembly name from output path
 			var assemblyName = Path.GetFileNameWithoutExtension(genParams.OutputDLLPath);
 
 			// Create compilation options
-			var compilationOptions = new CSharpCompilationOptions(OutputKind.WindowsRuntimeMetadata)
-				.WithOptimizationLevel(OptimizationLevel.Debug)
+			var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+				.WithOptimizationLevel(OptimizationLevel.Release)
 				.WithPlatform(Platform.AnyCpu);
 
 			// Create the compilation
@@ -59,16 +113,9 @@ namespace QBS.Editor
 			EmitResult result;
 			using (var dllStream = new FileStream(genParams.OutputDLLPath!, FileMode.Create))
 			{
-				if (genParams.KeepSources)
-				{
-					var pdbPath = Path.ChangeExtension(genParams.OutputDLLPath, ".pdb");
-					using var pdbStream = new FileStream(pdbPath, FileMode.Create);
-					result = compilation.Emit(dllStream, pdbStream, options: emitOptions);
-				}
-				else
-				{
-					result = compilation.Emit(dllStream, options: emitOptions);
-				}
+				var pdbPath = Path.ChangeExtension(genParams.OutputDLLPath, ".pdb");
+				using var pdbStream = new FileStream(pdbPath, FileMode.Create);
+				result = compilation.Emit(dllStream, pdbStream, options: emitOptions);
 			}
 
 			if (result.Success)
@@ -101,22 +148,21 @@ namespace QBS.Editor
 			throw new Exception(sb.ToString());
 		}
 
-		private static List<MetadataReference> ResolveAssemblyReferences(List<SourceFile> genParamsSources, bool genParamsIsSourceForEditor)
+		private List<MetadataReference> ResolveAssemblyReferences()
 		{
-			var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-
-			var netStandardAssembly = allAssemblies.FirstOrDefault
-				(assembly => assembly.FullName.Contains("netstandard", StringComparison.InvariantCultureIgnoreCase));
-
-			var references = new List<MetadataReference>
+			var references = new List<MetadataReference>();
+			foreach (var assemblyPath in _assembliesToReference)
 			{
-				MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-				MetadataReference.CreateFromFile(typeof(Object).Assembly.Location),
-				MetadataReference.CreateFromFile(netStandardAssembly.Location),
-				//MetadataReference.CreateFromFile(),
-			};
+				references.Add(MetadataReference.CreateFromFile(assemblyPath));
+			}
 
 			return references;
+		}
+
+		public void Dispose()
+		{
+			_assembliesToReference?.Clear();
+			_assembliesToReference = null;
 		}
 	}
 }

@@ -1,0 +1,28 @@
+using UnityEngine;
+
+namespace QBS.Core
+{
+	[CreateAssetMenu(fileName = "RuntimeLogSettings", menuName = "QBS/Runtime Log Settings")]
+	public class RuntimeLogSettings : ScriptableObject
+	{
+		[SerializeField]
+		[Tooltip("Minimum log level to display. Logs below this level will be filtered out.")]
+		private LogLevel minimumLevel = LogLevel.Trace;
+
+		[SerializeField]
+		[Tooltip("Enabled log channels. Only logs from enabled channels will be displayed.")]
+		private LogChannel enabledChannels = LogChannel.All;
+
+		public LogLevel MinimumLevel
+		{
+			get => minimumLevel;
+			set => minimumLevel = value;
+		}
+
+		public LogChannel EnabledChannels
+		{
+			get => enabledChannels;
+			set => enabledChannels = value;
+		}
+	}
+}

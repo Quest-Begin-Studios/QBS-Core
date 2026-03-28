@@ -14,12 +14,6 @@ namespace QBS.Core.Editor
 		private BackingType _backingType = BackingType.Int;
 		private EnumTypeOption _enumType = EnumTypeOption.Simple;
 
-		private readonly List<CustomValueEntry> _customValues = new()
-		{
-			new CustomValueEntry { Key = "Value1", Value = "10" },
-			new CustomValueEntry { Key = "Value2", Value = "20" },
-			new CustomValueEntry { Key = "Value3", Value = "30" },
-		};
 
 		private ReorderableList _enumKeysList;
 		private ReorderableList _customValuesList;
@@ -47,7 +41,7 @@ namespace QBS.Core.Editor
 		}
 
 		[Serializable]
-		private class CustomValueEntry
+		public class CustomValueEntry
 		{
 			public string Key = "";
 			public string Value = "";
@@ -61,8 +55,39 @@ namespace QBS.Core.Editor
 		}
 
 		public string GeneratedCode { get; private set; } = "";
-		public List<string> EnumKeys { get; } = new() { "Value1", "Value2", "Value3" };
+		public List<string> EnumKeys { get; } = new();
 		public List<FlagCombinationEntry> FlagCombinations { get; } = new();
+		public List<CustomValueEntry> CustomValues { get; } = new();
+		
+		public void ConfigureEnumProperties(string enumName, string namespaceStr, EnumTypeOption enumType, BackingType backingType)
+		{
+			_enumName = enumName;
+			_enumType = enumType;
+			_backingType = backingType;
+			_namespace = namespaceStr;
+		}
+
+		public void ConfigureEnumKeys(List<string> enumKeys = null, List<FlagCombinationEntry> flagCombinations = null,
+			List<CustomValueEntry> customValueEntries = null)
+		{
+			if (enumKeys != null)
+			{
+				EnumKeys.Clear();
+				EnumKeys.AddRange(enumKeys);
+			}
+
+			if (flagCombinations != null)
+			{
+				FlagCombinations.Clear();
+				FlagCombinations.AddRange(flagCombinations);
+			}
+
+			if (customValueEntries != null)
+			{
+				CustomValues.Clear();
+				CustomValues.AddRange(customValueEntries);
+			}
+		}
 
 		public void Initialize()
 		{
@@ -87,7 +112,7 @@ namespace QBS.Core.Editor
 				},
 			};
 
-			_customValuesList = new ReorderableList(_customValues, typeof(CustomValueEntry), true, true, true, true)
+			_customValuesList = new ReorderableList(CustomValues, typeof(CustomValueEntry), true, true, true, true)
 			{
 				drawHeaderCallback = rect =>
 				{
@@ -97,7 +122,7 @@ namespace QBS.Core.Editor
 				},
 				drawElementCallback = (rect, index, _, _) =>
 				{
-					var entry = _customValues[index];
+					var entry = CustomValues[index];
 					entry.Key = EditorGUI.TextField
 					(
 						new Rect(rect.x, rect.y, rect.width * 0.48f, EditorGUIUtility.singleLineHeight),
@@ -111,11 +136,11 @@ namespace QBS.Core.Editor
 				},
 				onAddCallback = _ =>
 				{
-					_customValues.Add(new CustomValueEntry());
+					CustomValues.Add(new CustomValueEntry());
 				},
 				onRemoveCallback = list =>
 				{
-					_customValues.RemoveAt(list.index);
+					CustomValues.RemoveAt(list.index);
 				},
 			};
 
@@ -148,13 +173,37 @@ namespace QBS.Core.Editor
 					EditorGUI.LabelField(new Rect(rect.x, y, rect.width, EditorGUIUtility.singleLineHeight), "Flags:");
 					y += EditorGUIUtility.singleLineHeight + 2;
 
+					// Collect all available flags
+					// WARN: uses a fuckton of memory, essentially one list per composite flag.
+					var availableFlags = GetAvailableFlags(index);
+
 					for (var i = 0; i < entry.Flags.Count; i++)
 					{
-						entry.Flags[i] = EditorGUI.TextField
+						var currentFlag = entry.Flags[i];
+						var selectedIndex = availableFlags.IndexOf(currentFlag);
+						if (selectedIndex == -1 && !string.IsNullOrEmpty(currentFlag))
+						{
+							// If current flag is not in available list, add it temporarily
+							availableFlags.Insert(0, currentFlag);
+							selectedIndex = 0;
+						}
+						else if (selectedIndex == -1)
+						{
+							selectedIndex = 0;
+						}
+
+						var newIndex = EditorGUI.Popup
 						(
 							new Rect(rect.x + 20, y, rect.width - 60, EditorGUIUtility.singleLineHeight),
-							entry.Flags[i]
+							selectedIndex,
+							availableFlags.ToArray()
 						);
+
+						if (newIndex >= 0 && newIndex < availableFlags.Count)
+						{
+							entry.Flags[i] = availableFlags[newIndex];
+						}
+
 						if (GUI.Button(new Rect(rect.x + rect.width - 35, y, 30, EditorGUIUtility.singleLineHeight), "-"))
 						{
 							entry.Flags.RemoveAt(i);
@@ -165,7 +214,7 @@ namespace QBS.Core.Editor
 
 					if (GUI.Button(new Rect(rect.x + 20, y, 100, EditorGUIUtility.singleLineHeight), "Add Flag"))
 					{
-						entry.Flags.Add("");
+						entry.Flags.Add(availableFlags.Count > 0 ? availableFlags[0] : "");
 					}
 				},
 				onAddCallback = _ =>
@@ -219,25 +268,6 @@ namespace QBS.Core.Editor
 			EditorGUILayout.Space();
 		}
 
-		public bool DrawGenerateEnumButton()
-		{
-			var pressed = GUILayout.Button("Generate Enum", GUILayout.Height(30));
-			if (pressed)
-			{
-				GenerateEnum();
-			}
-
-			return pressed;
-		}
-
-		public void ConfigureEnumProperties(string enumName, string namespaceStr, EnumTypeOption enumType, BackingType backingType)
-		{
-			_enumName = enumName;
-			_enumType = enumType;
-			_backingType = backingType;
-			_namespace = namespaceStr;
-		}
-
 		public void DrawOutputGUI(bool showCopyButton = true)
 		{
 			if (!string.IsNullOrEmpty(GeneratedCode))
@@ -257,7 +287,7 @@ namespace QBS.Core.Editor
 			}
 		}
 
-		public void GenerateEnum()
+		public bool GenerateEnum()
 		{
 			try
 			{
@@ -278,7 +308,10 @@ namespace QBS.Core.Editor
 			{
 				GeneratedCode = $"Error generating enum:\n{ex.Message}";
 				Debug.LogError($"Enum generation failed: {ex.Message}\n{ex.StackTrace}");
+				return false;
 			}
+			
+			return true;
 		}
 
 		private string GenerateEnumWithType<T>() where T : struct, IEquatable<T>, IComparable<T>
@@ -327,7 +360,7 @@ namespace QBS.Core.Editor
 		{
 			var customValues = new Dictionary<string, T>();
 
-			foreach (var entry in _customValues)
+			foreach (var entry in CustomValues)
 			{
 				var key = entry.Key.Trim();
 				var valueStr = entry.Value.Trim();
@@ -378,6 +411,38 @@ namespace QBS.Core.Editor
 			}
 
 			return combinations.Count > 0 ? combinations : null;
+		}
+
+		private List<string> GetAvailableFlags(int currentCombinationIndex)
+		{
+			var availableFlags = new List<string>();
+
+			// Add all unique flags from EnumKeys
+			foreach (var key in EnumKeys)
+			{
+				var trimmed = key.Trim();
+				if (!string.IsNullOrEmpty(trimmed))
+				{
+					availableFlags.Add(trimmed);
+				}
+			}
+
+			// Add composite flags from other FlagCombinations
+			for (var i = 0; i < FlagCombinations.Count; i++)
+			{
+				if (i == currentCombinationIndex)
+				{
+					continue; // Skip the current combination being edited
+				}
+
+				var combinationName = FlagCombinations[i].Name.Trim();
+				if (!string.IsNullOrEmpty(combinationName))
+				{
+					availableFlags.Add(combinationName);
+				}
+			}
+
+			return availableFlags;
 		}
 	}
 }

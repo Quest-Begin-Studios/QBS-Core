@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -9,8 +10,10 @@ namespace QBS.Core.Editor
 	public class LogConfigWindow : EditorWindow
 	{
 		private const int MaxChannelsPerRow = 5;
+
 		private bool _logsEnabled;
 		private LogLevel _minimumLevel;
+		private RuntimeLogSettings _runtimeSettings;
 
 		private GUIStyle _headerStyle;
 		private GUIStyle _sectionStyle;
@@ -29,11 +32,17 @@ namespace QBS.Core.Editor
 
 		private void OnEnable()
 		{
+			// Load or create RuntimeLogSettings
+			_runtimeSettings = LoadOrCreateRuntimeSettings();
+
 			// Activate all log channels in case a preference isn't set.
 			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, ~0);
 			_minimumLevel = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel, 0);
 			_logsEnabled = LogEditorUtility.AreLogsEnabled();
-			
+
+			// Sync RuntimeLogSettings with current EditorPrefs
+			SyncRuntimeSettingsFromEditorPrefs();
+
 			var logChannelValues = Enum.GetValues(typeof(LogChannel));
 			_individualChannels = GetIndividualChannels(logChannelValues);
 			_compositeChannels = GetCompositeChannels(logChannelValues);
@@ -166,7 +175,7 @@ namespace QBS.Core.Editor
 			if (newLevel != _minimumLevel)
 			{
 				_minimumLevel = newLevel;
-				SetMinimumLevel(newLevel);
+				WriteMinimumLevel(newLevel);
 			}
 			EditorGUILayout.EndHorizontal();
 			EditorGUILayout.EndVertical();
@@ -254,17 +263,37 @@ namespace QBS.Core.Editor
 			Debug.Log($"[QBS] Logging {(_logsEnabled ? "enabled" : "disabled")}");
 		}
 
-		private void SetMinimumLevel(LogLevel level)
+		private void WriteMinimumLevel(LogLevel level)
 		{
 			Log.MinimumLevel = level;
 			EditorPrefs.SetInt(LogEditorConstants.MinimumLevel, (int)level);
+
+			if (_runtimeSettings != null)
+			{
+				_runtimeSettings.MinimumLevel = level;
+				EditorUtility.SetDirty(_runtimeSettings);
+				AssetDatabase.SaveAssets();
+			}
+
 			Debug.Log($"[QBS] Minimum log level set to: {level}");
+		}
+
+		private void WriteLogChannels(LogChannel channels)
+		{
+			Log.EnabledChannels = channels;
+			EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)channels);
+
+			if (_runtimeSettings != null)
+			{
+				_runtimeSettings.EnabledChannels = channels;
+				EditorUtility.SetDirty(_runtimeSettings);
+				AssetDatabase.SaveAssets();
+			}
 		}
 
 		private void SetStateOfAllChannels(bool enabled)
 		{
-			Log.SetChannelEnabled(LogChannel.All, enabled);
-			EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, enabled ? ~0 : 0);
+			WriteLogChannels(enabled ? LogChannel.All : LogChannel.None);
 		}
 
 		private void DrawActiveChannelsList()
@@ -391,14 +420,20 @@ namespace QBS.Core.Editor
 
 		private bool HasMultipleBitsSet(int value)
 		{
-			if (value == 0) return false;
-			
+			if (value == 0)
+			{
+				return false;
+			}
+
 			var count = 0;
 			while (value != 0)
 			{
 				value &= value - 1;
 				count++;
-				if (count > 1) return true;
+				if (count > 1)
+				{
+					return true;
+				}
 			}
 			return false;
 		}
@@ -409,7 +444,7 @@ namespace QBS.Core.Editor
 			const int padding = 20;
 			var availableWidth = position.width - padding;
 			var columns = Mathf.Max(1, (int)(availableWidth / toggleWidth));
-		
+
 			var channelIndex = 0;
 
 			while (channelIndex < _individualChannels.Count)
@@ -424,8 +459,11 @@ namespace QBS.Core.Editor
 					var newEnabled = EditorGUILayout.ToggleLeft(channel.ToString(), isEnabled, GUILayout.Width(toggleWidth));
 					if (newEnabled != isEnabled)
 					{
-						Log.SetChannelEnabled(channel, newEnabled);
-						EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)Log.EnabledChannels);
+						var updatedChannels = newEnabled ?
+							Log.EnabledChannels | channel :
+							Log.EnabledChannels & ~channel;
+						
+						WriteLogChannels(updatedChannels);
 					}
 
 					channelIndex++;
@@ -453,15 +491,11 @@ namespace QBS.Core.Editor
 
 				if (GUILayout.Button(enumName, buttonStyle, GUILayout.Height(28)))
 				{
-					if (isFullyEnabled)
-					{
-						Log.EnabledChannels &= ~channel;
-					}
-					else
-					{
-						Log.EnabledChannels |= channel;
-					}
-					EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)Log.EnabledChannels);
+					var updatedChannels = isFullyEnabled ? 
+						Log.EnabledChannels & ~channel : 
+						Log.EnabledChannels | channel;
+					
+					WriteLogChannels(updatedChannels);
 				}
 
 				GUI.backgroundColor = originalBg;
@@ -484,6 +518,43 @@ namespace QBS.Core.Editor
 			}
 
 			return activeChannels;
+		}
+
+		private RuntimeLogSettings LoadOrCreateRuntimeSettings()
+		{
+			var settings = AssetDatabase.LoadAssetAtPath<RuntimeLogSettings>(LogEditorConstants.RuntimeSettingsPath);
+			if (settings != null)
+			{
+				return settings;
+			}
+			
+			var directory = Path.GetDirectoryName(LogEditorConstants.RuntimeSettingsPath);
+			if (!Directory.Exists(directory))
+			{
+				Directory.CreateDirectory(directory);
+			}
+
+			settings = CreateInstance<RuntimeLogSettings>();
+			AssetDatabase.CreateAsset(settings, LogEditorConstants.RuntimeSettingsPath);
+			AssetDatabase.SaveAssets();
+			AssetDatabase.Refresh();
+
+			Debug.Log($"[LogConfigWindow] Created RuntimeLogSettings at {LogEditorConstants.RuntimeSettingsPath}");
+
+			return settings;
+		}
+
+		private void SyncRuntimeSettingsFromEditorPrefs()
+		{
+			if (_runtimeSettings == null)
+			{
+				return;
+			}
+
+			_runtimeSettings.MinimumLevel = _minimumLevel;
+			_runtimeSettings.EnabledChannels = Log.EnabledChannels;
+			EditorUtility.SetDirty(_runtimeSettings);
+			AssetDatabase.SaveAssets();
 		}
 	}
 }

@@ -1,0 +1,29 @@
+using UnityEngine;
+
+namespace QBS.Core
+{
+	public static class LogRuntimeInitializer
+	{
+		private const string SettingsResourcePath = "RuntimeLogSettings";
+
+		[RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+		private static void InitializeLogSettings()
+		{
+			var settings = Resources.Load<RuntimeLogSettings>(SettingsResourcePath);
+
+			if (settings != null)
+			{
+				Log.MinimumLevel = settings.MinimumLevel;
+				Log.EnabledChannels = settings.EnabledChannels;
+
+				Debug.Log($"[LogRuntimeInitializer] Log settings loaded: MinLevel={settings.MinimumLevel}, Channels={settings.EnabledChannels}");
+			}
+			else
+			{
+				Debug.LogWarning($"[LogRuntimeInitializer] No RuntimeLogSettings found at Resources/{SettingsResourcePath}. Using default settings.");
+				Log.MinimumLevel = LogLevel.Trace;
+				Log.EnabledChannels = LogChannel.All;
+			}
+		}
+	}
+}

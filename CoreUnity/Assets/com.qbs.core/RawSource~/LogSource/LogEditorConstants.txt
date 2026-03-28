@@ -6,5 +6,6 @@ namespace QBS.Core.Editor
 		public const string LogsDisabledWarningShown = "QBS_Logs_Disabled_Warning_Shown";
 		public const string ActiveChannels = "QBS_Log_ActiveChannels";
 		public const string LogsEnabledSymbol = "ENABLE_LOGS";
+		public const string RuntimeSettingsPath = "Assets/Plugins/Log/Runtime/RuntimeLogSettings.asset";
 	}
 }

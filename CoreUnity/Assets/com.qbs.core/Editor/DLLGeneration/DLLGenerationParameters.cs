@@ -1,6 +1,7 @@
+using JetBrains.Annotations;
 using System.Collections.Generic;
 
-namespace QBS.Editor
+namespace QBS.Core.Editor
 {
 	public struct SourceFile
 	{
@@ -18,15 +19,19 @@ namespace QBS.Editor
 	{
 		public List<SourceFile> Sources { get; }
 		public string OutputDLLPath { get; }
-		public bool KeepSources { get; }
-		public bool IsSourceForEditor { get; }
 
-		public DLLGenerationParameters(List<SourceFile> sources, string outputDLLPath, bool keepSources, bool isSourceForEditor)
+		[CanBeNull]
+		public List<string> ExtraAssembliesToReference { get; }
+		
+		[CanBeNull]
+		public List<string> ScriptingSymbols { get; }
+
+		public DLLGenerationParameters(List<SourceFile> sources, string outputDLLPath, List<string> extraAssembliesToReference = null, List<string> scriptingSymbols = null)
 		{
 			Sources = sources;
-			KeepSources = keepSources;
-			IsSourceForEditor = isSourceForEditor;
 			OutputDLLPath = outputDLLPath;
+			ExtraAssembliesToReference = extraAssembliesToReference;
+			ScriptingSymbols = scriptingSymbols;
 		}
 	}
 

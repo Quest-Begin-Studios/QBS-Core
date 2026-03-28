@@ -1,0 +1,12 @@
+{
+    "RuntimeAssemblies": [
+        "mscorlib",
+        "UnityEngine"
+    ],
+    "EditorAssemblies": [
+        "mscorlib",
+        "System.Core",
+        "UnityEditor",
+        "UnityEngine"
+    ]
+}

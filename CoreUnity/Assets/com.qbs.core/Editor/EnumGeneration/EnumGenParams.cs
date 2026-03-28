@@ -120,10 +120,15 @@ namespace QBS.Core.Editor
 			{
 				foreach (var enumValue in combination)
 				{
-					if (!BaseEnumKeys.Contains(enumValue))
+					if (string.CompareOrdinal(flagName, enumValue) == 0)
+					{
+						throw new ArgumentException("A composite flag cannot be defined as a combination of itself ");
+					}
+					
+					if (!BaseEnumKeys.Contains(enumValue) && !FlagCombinations.ContainsKey(enumValue))
 					{
 						throw new ArgumentException( @$"A combination flag definition {flagName} is trying to reference 
-							{enumValue}, but it does not exist in the base flags definition");
+							{enumValue}, but it does not exist in the base flags or other combination flags definitions");
 					}
 				}
 			}

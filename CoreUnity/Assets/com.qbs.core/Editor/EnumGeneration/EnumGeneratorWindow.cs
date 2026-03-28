@@ -27,7 +27,10 @@ namespace QBS.Core.Editor
 
 			_enumGenerator.DrawConfigurationGUI();
 			_enumGenerator.DrawEnumListGUI();
-			_enumGenerator.DrawGenerateEnumButton();
+			if (GUILayout.Button("Generate Enum", GUILayout.Height(30)))
+			{
+				_enumGenerator.GenerateEnum();
+			}
 			_enumGenerator.DrawOutputGUI();
 
 			EditorGUILayout.EndScrollView();

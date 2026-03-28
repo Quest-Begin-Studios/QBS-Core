@@ -31,7 +31,7 @@ namespace QBS.Core
 	public static class AssemblyUtilities
 	{
 		private static Dictionary<UnityAssemblyType, Assembly> _assemblyMap;
-
+		private static List<Assembly> LoadedAssemblies { get; set; }
 
 #if UNITY_EDITOR
 
@@ -39,7 +39,11 @@ namespace QBS.Core
 		///     Invalidate cache of assemblies on script reload
 		/// </summary>
 		[DidReloadScripts]
-		private static void OnAssemblyReloaded() => _assemblyMap = null;
+		private static void OnAssemblyReloaded()
+		{
+			_assemblyMap = null;
+			LoadedAssemblies = null;
+		}
 
 #endif
 
@@ -65,10 +69,11 @@ namespace QBS.Core
 			_ => UnityAssemblyType.None,
 		};
 
+		//TODO: Change name, ambiguous with GetLoadedAssemblies
 		private static Dictionary<UnityAssemblyType, Assembly> GetAllAssemblies()
 		{
 			var newAssemblyMap = new Dictionary<UnityAssemblyType, Assembly>();
-			var assemblyArray = AppDomain.CurrentDomain.GetAssemblies();
+			var assemblyArray = GetLoadedAssemblies();
 			foreach (var assembly in assemblyArray)
 			{
 				var assemblyType = GetAssemblyType(assembly.GetName().Name);
@@ -122,6 +127,12 @@ namespace QBS.Core
 			}
 
 			return types;
+		}
+		
+		public static List<Assembly> GetLoadedAssemblies()
+		{
+			LoadedAssemblies ??= new List<Assembly>(AppDomain.CurrentDomain.GetAssemblies());
+			return LoadedAssemblies;
 		}
 
 	}
