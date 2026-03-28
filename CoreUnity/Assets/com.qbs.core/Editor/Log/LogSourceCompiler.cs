@@ -217,7 +217,7 @@ namespace QBS.Core.Editor
 			_editorAssemblyReferences.Clear();
 			
 			var packagePath = "Packages/com.qbs.core";
-			var rawSourceFolder = Path.Combine(packagePath, "RawSource~");
+			var rawSourceFolder = Path.Combine(packagePath, "RawSource~/LogSource");
 			
 			if (!Directory.Exists(rawSourceFolder))
 			{
