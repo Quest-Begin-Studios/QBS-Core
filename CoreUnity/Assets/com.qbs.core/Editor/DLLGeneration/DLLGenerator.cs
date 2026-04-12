@@ -105,6 +105,14 @@ namespace QBS.Core.Editor
 				sb.AppendLine($"Message: {diagnostic.GetMessage()}");
 				sb.AppendLine("-".PadRight(80, '-'));
 			}
+			
+			//Also purge all written files in case of compilation failure
+			if (File.Exists(genParams.OutputDLLPath))
+				File.Delete(genParams.OutputDLLPath);
+
+			var pdbPathToDelete = Path.ChangeExtension(genParams.OutputDLLPath, ".pdb");
+			if (File.Exists(pdbPathToDelete))
+				File.Delete(pdbPathToDelete);
 
 			throw new Exception(sb.ToString());
 		}

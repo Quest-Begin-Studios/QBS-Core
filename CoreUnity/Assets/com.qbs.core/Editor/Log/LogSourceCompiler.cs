@@ -15,7 +15,7 @@ namespace QBS.Core.Editor
 		private const string RawSourceFolderPath = @"Assets\com.qbs.core\RawSource~\LogSource";
 
 		private EnumGeneratorComponent _enumGenerator;
-		private StringEnumGenerator _stringEnumGenerator;
+		private EnumUtilsGenerator _stringEnumGenerator;
 		private Vector2 _scrollPosition;
 		private Vector2 _enumScrollPosition;
 
@@ -38,7 +38,7 @@ namespace QBS.Core.Editor
 			_editorAssemblyReferences = new List<string>();
 			_runtimeAssemblyReferences = new List<string>();
 
-			_stringEnumGenerator = new StringEnumGenerator();
+			_stringEnumGenerator = new EnumUtilsGenerator();
 			InitializeAndConfigureEnumGenerator();
 		}
 
@@ -82,20 +82,22 @@ namespace QBS.Core.Editor
 			var helpBoxStyle = new GUIStyle(EditorStyles.helpBox);
 			helpBoxStyle.fontSize = 13;
 			helpBoxStyle.padding = new RectOffset(10, 10, 10, 10);
-			EditorGUILayout.LabelField(
+			EditorGUILayout.LabelField
+			(
 				"This tool compiles log sources into a DLL.\n\n" +
 				"Steps:\n" +
 				"1. Configure and add LogChannel enum keys below\n" +
 				"2. Click 'Generate Enum' to create the enum and read sources from RawSource~ folder\n" +
 				"3. Click 'Generate DLL' to compile the final DLL\n\n" +
 				"Output: The compiled DLL will be placed in the Plugins folder.",
-				helpBoxStyle);
+				helpBoxStyle
+			);
 			EditorGUILayout.EndVertical();
 
 			EditorGUILayout.Space(10);
 
 			_scrollPosition = EditorGUILayout.BeginScrollView(_scrollPosition);
-			
+
 			if (!string.IsNullOrEmpty(_capturedEnumCode))
 			{
 				EditorGUILayout.Space(20);
@@ -164,7 +166,7 @@ namespace QBS.Core.Editor
 			if (GUILayout.Button("Generate Enum", GUILayout.Height(30)))
 			{
 				ReadSourcesFromRawSourceFolder();
-				
+
 				var enumGenSuccess = _enumGenerator.GenerateEnum();
 
 				if (enumGenSuccess)
@@ -204,7 +206,13 @@ namespace QBS.Core.Editor
 			var enumKeys = new List<string>();
 			enumKeys.AddRange(_enumGenerator.EnumKeys);
 			enumKeys.AddRange(_enumGenerator.FlagCombinations.Select(combination => combination.Name));
-			var toStringNoBoxSource = _stringEnumGenerator.GenerateNoBoxStringsFromSource(LogChannelsName, enumKeys, NamespaceStr);
+			var toStringNoBoxSource = _stringEnumGenerator.Generate
+			(
+				EnumUtilities.GenerateToStringFast,
+				LogChannelsName,
+				enumKeys,
+				NamespaceStr
+			);
 
 			_sourceFiles.Add(new SourceFile(_capturedEnumCode, "LogChannels.cs"));
 			_sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
@@ -215,21 +223,21 @@ namespace QBS.Core.Editor
 			_sourceFiles.Clear();
 			_runtimeAssemblyReferences.Clear();
 			_editorAssemblyReferences.Clear();
-			
+
 			var packagePath = "Packages/com.qbs.core";
 			var rawSourceFolder = Path.Combine(packagePath, "RawSource~/LogSource");
-			
+
 			if (!Directory.Exists(rawSourceFolder))
 			{
 				Debug.LogWarning($"RawSource~ folder not found at package path: {rawSourceFolder}");
 				rawSourceFolder = RawSourceFolderPath;
-				
+
 				if (!Directory.Exists(rawSourceFolder))
 				{
 					Debug.LogError($"RawSource~ folder not found at fallback path: {rawSourceFolder}");
 					return;
 				}
-				
+
 				Debug.Log($"Using fallback RawSource~ folder at: {rawSourceFolder}");
 			}
 
@@ -264,7 +272,7 @@ namespace QBS.Core.Editor
 				Debug.LogWarning($"AssemblyReferences.json not found at: {jsonFile}");
 				return;
 			}
-			
+
 			try
 			{
 				var jsonContent = File.ReadAllText(jsonFile);
