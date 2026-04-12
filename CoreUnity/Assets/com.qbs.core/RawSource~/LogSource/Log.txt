@@ -156,14 +156,14 @@ namespace QBS.Core
 			}
 
 			// Append level first.
-			var levelStr = level.ToStringNoBox();
+			var levelStr = level.ToStringFast();
 			Builder.Clear();
 			Builder.AppendFormat(BracketsFormat, levelStr);
 
 			// Append channel if specified.
 			if (channel != default)
 			{
-				var channelStr = channel.ToStringNoBox();
+				var channelStr = channel.ToStringFast();
 				Builder.AppendFormat(BracketsFormat, channelStr);
 			}
 
@@ -213,14 +213,14 @@ namespace QBS.Core
 			}
 
 			// Append level first.
-			var levelStr = level.ToStringNoBox();
+			var levelStr = level.ToStringFast();
 			Builder.Clear();
 			Builder.AppendFormat(BracketsFormat, levelStr);
 
 			// Append channel if specified.
 			if (channel != default)
 			{
-				var channelStr = channel.ToStringNoBox();
+				var channelStr = channel.ToStringFast();
 				Builder.AppendFormat(BracketsFormat, channelStr);
 			}
 
@@ -349,7 +349,7 @@ namespace QBS.Core
 			}
 		}
 
-		private static string ToStringNoBox(this LogLevel level)
+		private static string ToStringFast(this LogLevel level)
 		{
 			return level switch
 			{
