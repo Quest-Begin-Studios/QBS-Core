@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor.Callbacks;
+using UnityEngine.Assemblies;
 
 namespace QBS.Core
 {
@@ -30,8 +31,18 @@ namespace QBS.Core
 	/// </summary>
 	public static class AssemblyUtilities
 	{
+		
+		private static IReadOnlyList<Assembly> _loadedAssemblies;
 		private static Dictionary<UnityAssemblyType, Assembly> _assemblyMap;
-		private static List<Assembly> LoadedAssemblies { get; set; }
+		public static IReadOnlyList<Assembly> LoadedAssemblies
+		{
+			get
+			{
+				_loadedAssemblies ??= CurrentAssemblies.GetLoadedAssemblies();
+				return _loadedAssemblies;
+			}
+			private set => _loadedAssemblies = value;
+		}
 
 #if UNITY_EDITOR
 
@@ -73,8 +84,8 @@ namespace QBS.Core
 		private static Dictionary<UnityAssemblyType, Assembly> GetAllAssemblies()
 		{
 			var newAssemblyMap = new Dictionary<UnityAssemblyType, Assembly>();
-			var assemblyArray = GetLoadedAssemblies();
-			foreach (var assembly in assemblyArray)
+			var assemblies = LoadedAssemblies;
+			foreach (var assembly in assemblies)
 			{
 				var assemblyType = GetAssemblyType(assembly.GetName().Name);
 				if (assemblyType != UnityAssemblyType.None)
@@ -128,12 +139,5 @@ namespace QBS.Core
 
 			return types;
 		}
-		
-		public static List<Assembly> GetLoadedAssemblies()
-		{
-			LoadedAssemblies ??= new List<Assembly>(AppDomain.CurrentDomain.GetAssemblies());
-			return LoadedAssemblies;
-		}
-
 	}
 }

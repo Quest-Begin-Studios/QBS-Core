@@ -300,7 +300,7 @@ namespace QBS.Core.Editor
 		private List<string> ResolveAssemblyPaths(string[] assemblyNames)
 		{
 			var resolvedPaths = new List<string>();
-			var loadedAssemblies = AssemblyUtilities.GetLoadedAssemblies();
+			var loadedAssemblies = AssemblyUtilities.LoadedAssemblies;
 
 			foreach (var assemblyName in assemblyNames)
 			{
@@ -311,8 +311,9 @@ namespace QBS.Core.Editor
 
 				if (assembly != null)
 				{
-					resolvedPaths.Add(assembly.Location);
-					Debug.Log($"Resolved assembly '{assemblyName}' to: {assembly.Location}");
+					var assemblyPath = assembly.GetLoadedAssemblyPath();
+					resolvedPaths.Add(assemblyPath);
+					Debug.Log($"Resolved assembly '{assemblyName}' to: {assemblyPath}");
 				}
 				else
 				{

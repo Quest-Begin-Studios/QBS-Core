@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using UnityEngine;
 
 namespace QBS.Core.Editor
 {
@@ -114,6 +115,12 @@ namespace QBS.Core.Editor
 			if (File.Exists(pdbPathToDelete))
 				File.Delete(pdbPathToDelete);
 
+			foreach (var files in genParams.Sources)
+			{
+				File.WriteAllText(Path.Combine(Application.temporaryCachePath, files.FilePath), files.SourceContent);
+			}
+
+			Debug.Log($"Compilation failed; Writing generator input to folder: {Application.temporaryCachePath}");
 			throw new Exception(sb.ToString());
 		}
 
