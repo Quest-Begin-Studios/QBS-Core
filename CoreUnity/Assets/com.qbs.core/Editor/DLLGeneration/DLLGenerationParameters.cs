@@ -19,10 +19,7 @@ namespace QBS.Core.Editor
 	{
 		public List<SourceFile> Sources { get; }
 		public string OutputDLLPath { get; }
-
-		[CanBeNull]
 		public List<string> ExtraAssembliesToReference { get; }
-		
 		[CanBeNull]
 		public List<string> ScriptingSymbols { get; }
 
@@ -30,8 +27,38 @@ namespace QBS.Core.Editor
 		{
 			Sources = sources;
 			OutputDLLPath = outputDLLPath;
-			ExtraAssembliesToReference = extraAssembliesToReference;
+			ExtraAssembliesToReference = extraAssembliesToReference ?? new List<string>();
 			ScriptingSymbols = scriptingSymbols;
+		}
+	}
+
+	public class DLLGenerationDiagnostic
+	{
+		public string Id { get; }
+		public string File { get; }
+		public int Line { get; }
+		public int Column { get; }
+		public string Message { get; }
+
+		public DLLGenerationDiagnostic(string id, string file, int line, int column, string message)
+		{
+			Id = id;
+			File = file;
+			Line = line;
+			Column = column;
+			Message = message;
+		}
+	}
+
+	public class DLLGenerationErrorDetails
+	{
+		public int ErrorCount { get; }
+		public IReadOnlyList<DLLGenerationDiagnostic> Diagnostics { get; }
+
+		public DLLGenerationErrorDetails(int errorCount, IList<DLLGenerationDiagnostic> diagnostics)
+		{
+			ErrorCount = errorCount;
+			Diagnostics = (IReadOnlyList<DLLGenerationDiagnostic>)diagnostics;
 		}
 	}
 

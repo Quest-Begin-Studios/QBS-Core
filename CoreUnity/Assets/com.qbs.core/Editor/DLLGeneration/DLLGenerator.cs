@@ -14,7 +14,7 @@ namespace QBS.Core.Editor
 	{
 		private List<string> _assembliesToReference = new();
 
-		public bool GenerateDLL(DLLGenerationParameters genParams)
+		public bool GenerateDLL(DLLGenerationParameters genParams, out DLLGenerationErrorDetails errorDetails)
 		{
 			if (genParams.Sources == null || genParams.Sources.Count == 0)
 			{
@@ -82,6 +82,7 @@ namespace QBS.Core.Editor
 
 			if (result.Success)
 			{
+				errorDetails = null;
 				return true;
 			}
 
@@ -97,6 +98,7 @@ namespace QBS.Core.Editor
 			sb.AppendLine($"Compilation failed with {diagnostics.Length} error(s):");
 			sb.AppendLine("=".PadRight(80, '='));
 
+			var diagnosticDetails = new List<DLLGenerationDiagnostic>(diagnostics.Length);
 			foreach (var diagnostic in diagnostics)
 			{
 				var lineSpan = diagnostic.Location.GetLineSpan();
@@ -105,15 +107,31 @@ namespace QBS.Core.Editor
 				sb.AppendLine($"Location: Line {lineSpan.StartLinePosition.Line + 1}, Column {lineSpan.StartLinePosition.Character + 1}");
 				sb.AppendLine($"Message: {diagnostic.GetMessage()}");
 				sb.AppendLine("-".PadRight(80, '-'));
+				diagnosticDetails.Add
+				(
+					new DLLGenerationDiagnostic
+					(
+						diagnostic.Id,
+						lineSpan.Path,
+						lineSpan.StartLinePosition.Line + 1,
+						lineSpan.StartLinePosition.Character + 1,
+						diagnostic.GetMessage()
+					)
+				);
 			}
-			
+			errorDetails = new DLLGenerationErrorDetails(diagnostics.Length, diagnosticDetails);
+
 			//Also purge all written files in case of compilation failure
 			if (File.Exists(genParams.OutputDLLPath))
+			{
 				File.Delete(genParams.OutputDLLPath);
+			}
 
 			var pdbPathToDelete = Path.ChangeExtension(genParams.OutputDLLPath, ".pdb");
 			if (File.Exists(pdbPathToDelete))
+			{
 				File.Delete(pdbPathToDelete);
+			}
 
 			foreach (var files in genParams.Sources)
 			{
@@ -121,7 +139,7 @@ namespace QBS.Core.Editor
 			}
 
 			Debug.Log($"Compilation failed; Writing generator input to folder: {Application.temporaryCachePath}");
-			throw new Exception(sb.ToString());
+			return false;
 		}
 
 		private List<MetadataReference> ResolveAssemblyReferences()

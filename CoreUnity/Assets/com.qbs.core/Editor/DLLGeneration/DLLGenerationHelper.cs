@@ -3,12 +3,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace QBS.Core.Editor
 {
 	public static class DLLGenerationHelper
 	{
+		private static readonly Regex AssemblyNameFromCS0012 = new(@"reference to assembly '([^,]+)", RegexOptions.Compiled);
+
 		private const string EditorFolderAddress = "Editor";
 		private const string RuntimeFolderAddress = "Runtime";
 
@@ -26,7 +29,8 @@ namespace QBS.Core.Editor
 		/// <param name="editorAssemblyReferences">Additional assembly references to include in editor compilation</param>
 		/// <param name="scriptingSymbols">Scripting symbols to define during compilation</param>
 		/// <returns>True if both runtime and editor DLL generation succeeded; otherwise false</returns>
-		public static bool TryGeneratingDLL(IEnumerable<SourceFile> sources, string outputDLLFolderName, string dllName, List<string> runtimeAssemblyReferences = null, List<string> editorAssemblyReferences = null, List<string> scriptingSymbols = null)
+		public static bool TryGeneratingDLL(IEnumerable<SourceFile> sources, string outputDLLFolderName, string dllName,
+			List<string> runtimeAssemblyReferences = null, List<string> editorAssemblyReferences = null, List<string> scriptingSymbols = null)
 		{
 			var editorSources = new List<SourceFile>();
 			var runtimeSources = new List<SourceFile>();
@@ -57,6 +61,12 @@ namespace QBS.Core.Editor
 				extraAssembliesToReference = new List<string>(editorAssemblyReferences);
 			}
 			var editorGenSuccess = CompileSources(false, editorSources, dllName, pathToPluginsFolder, extraAssembliesToReference, scriptingSymbols);
+
+			//clean up if either generation failed
+			if (!(runtimeGenSuccess && editorGenSuccess))
+			{
+				File.Delete(pathToPluginsFolder);
+			}
 
 			return runtimeGenSuccess && editorGenSuccess;
 		}
@@ -117,7 +127,7 @@ namespace QBS.Core.Editor
 		}
 
 		private static bool CompileSources(bool compileForRuntime, List<SourceFile> sources,
-		string dllName, string pathToPluginsFolder, List<string> extraReferenceAssemblies = null, List<string> scriptingSymbols = null)
+			string dllName, string pathToPluginsFolder, List<string> extraReferenceAssemblies = null, List<string> scriptingSymbols = null)
 		{
 			if (sources.Count == 0)
 			{
@@ -129,7 +139,71 @@ namespace QBS.Core.Editor
 			var generationParameters = new DLLGenerationParameters(sources, pathToDLL, extraReferenceAssemblies, scriptingSymbols);
 
 			var dllGenerator = new DLLGenerator();
-			return dllGenerator.GenerateDLL(generationParameters);
+			return RecursivelyTryCompilation(dllGenerator, generationParameters);
+		}
+
+
+		private static bool RecursivelyTryCompilation(DLLGenerator dllGenerator, DLLGenerationParameters generationParameters, int maxTries = 3,
+			int currentTry = 0)
+		{
+			var compilationResult = dllGenerator.GenerateDLL(generationParameters, out var errorDetails);
+
+			if (!compilationResult && currentTry < maxTries)
+			{
+				currentTry++;
+				if (errorDetails.ErrorCount == 0)
+				{
+					// Compilation failed but not due to code errors
+					return false;
+				}
+
+				var loadedAssemblies = AssemblyUtilities.LoadedAssemblies;
+				var missingAssemblyReferenceErrorFound = false;
+				foreach (var errorDiagnostic in errorDetails.Diagnostics)
+				{
+					// The type 'type' is defined in an assembly that is not referenced. You must add a reference to assembly 'assembly'.
+					// here we can just find the assembly name from the error message and add it to the extra references
+					if (errorDiagnostic.Id != "CS0012")
+					{
+						continue;
+					}
+
+					var match = AssemblyNameFromCS0012.Match(errorDiagnostic.Message);
+					if (!match.Success)
+					{
+						continue;
+					}
+
+					missingAssemblyReferenceErrorFound = true;
+					var assemblyName = match.Groups[1].Value;
+					var assembly = loadedAssemblies.FirstOrDefault
+					(   
+						a =>
+						string.Equals
+						(
+							a.GetName().Name,
+							assemblyName,
+							StringComparison.Ordinal
+						)
+					);
+					
+					if (assembly != null && !string.IsNullOrEmpty(assembly.GetLoadedAssemblyPath()))
+					{
+						generationParameters.ExtraAssembliesToReference.Add(assembly.Location);
+					}
+				}
+
+				// This helper can only fix missing assembly reference errors
+				// If no missing assembly reference errors were found, return false
+				if (!missingAssemblyReferenceErrorFound)
+				{
+					return false;
+				}
+				
+				return RecursivelyTryCompilation(dllGenerator, generationParameters, maxTries, currentTry);
+			}
+
+			return compilationResult;
 		}
 
 		/// <summary>

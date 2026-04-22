@@ -1,12 +1,5 @@
 {
   "dependencies": {
-    "com.qbs.roslynplugins": {
-      "version": "https://github.com/Quest-Begin-Studios/Roslyn-Plugins.git?path=RoslynPlugins/Assets/com.qbs.roslynplugins",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "95b856f4d7f49ac138a157693f480ebc1a07558a"
-    },
     "com.unity.ai.navigation": {
       "version": "2.0.12",
       "depth": 0,
