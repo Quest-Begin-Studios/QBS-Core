@@ -1,6 +1,5 @@
 {
   "dependencies": {
-    "com.qbs.roslynplugins": "https://github.com/Quest-Begin-Studios/Roslyn-Plugins.git?path=RoslynPlugins/Assets/com.qbs.roslynplugins",
     "com.unity.ai.navigation": "2.0.12",
     "com.unity.collab-proxy": "2.12.4",
     "com.unity.ide.rider": "3.0.39",
