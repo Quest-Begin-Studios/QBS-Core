@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
+using QBS.SourceGenerators.GeneratorDiscoveryHelpers;
+using QBS.SourceGenerators;
 
 namespace QBS.Core.Editor
 {
@@ -15,7 +17,6 @@ namespace QBS.Core.Editor
 		private const string RawSourceFolderPath = @"Assets\com.qbs.core\RawSource~\LogSource";
 
 		private EnumGeneratorComponent _enumGenerator;
-		private EnumUtilsGenerator _stringEnumGenerator;
 		private Vector2 _scrollPosition;
 		private Vector2 _enumScrollPosition;
 
@@ -37,8 +38,6 @@ namespace QBS.Core.Editor
 			_sourceFiles = new List<SourceFile>();
 			_editorAssemblyReferences = new List<string>();
 			_runtimeAssemblyReferences = new List<string>();
-
-			_stringEnumGenerator = new EnumUtilsGenerator();
 			InitializeAndConfigureEnumGenerator();
 		}
 
@@ -65,7 +64,6 @@ namespace QBS.Core.Editor
 		{
 			_sourceFiles = null;
 			_enumGenerator = null;
-			_stringEnumGenerator = null;
 
 			_capturedEnumCode = "";
 			_runtimeAssemblyReferences = null;
@@ -203,15 +201,24 @@ namespace QBS.Core.Editor
 
 		private void GenerateEnumHelpers()
 		{
-			var enumKeys = new List<string>();
-			enumKeys.AddRange(_enumGenerator.EnumKeys);
-			enumKeys.AddRange(_enumGenerator.FlagCombinations.Select(combination => combination.Name));
-			var toStringNoBoxSource = _stringEnumGenerator.Generate
+			var enumKeysCount = _enumGenerator.EnumKeys.Count;
+			var allKeysCount = enumKeysCount + _enumGenerator.FlagCombinations.Count;
+			
+			var enumKeys = new string[allKeysCount];
+			for (var i = 0; i < enumKeysCount; i++)
+			{
+				enumKeys[i] = _enumGenerator.EnumKeys[i];
+			}
+			for (var i = enumKeysCount; i < allKeysCount; i++) enumKeys[i] = _enumGenerator.FlagCombinations[i].Name;
+			var toStringNoBoxSource = EnumUtilsSourceWriter.CreateUtilsFromEnumDetails
 			(
-				EnumUtilities.GenerateToStringFast,
-				LogChannelsName,
-				enumKeys,
-				NamespaceStr
+				new EnumDetails
+				(
+					LogChannelsName,
+					enumKeys.ToArray(),
+					EnumUtilsGenOptions.GenerateToStringFast,
+					NamespaceStr
+				)
 			);
 
 			_sourceFiles.Add(new SourceFile(_capturedEnumCode, "LogChannels.cs"));
