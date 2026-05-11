@@ -10,8 +10,9 @@ QBS-Core provides essential development tools for building Unity projects. It in
 
 ### 🔧 Code Generation Tools
 - **Enum Generator**: Create simple, flags, or custom-value enumerations with configurable backing types
-- **String Enum Generator**: Generate type-safe string constant enumerations
+- **String Enum Generator**: Fast `ToStringFast()` string representation — now powered by the Roslyn Source Generators at compile time
 - **Flag Combinations**: Define named combinations of flag values
+- **Enum Utility Source Generators**: Auto-generate `HasFlagFast()`, `ToStringFast()`, and a `Values` array for any enum at compile time via `[EnumUtilities]`
 
 ### 📝 Logging System
 - **Log Source Compiler**: Editor tool for managing logging channels and compiling log sources
@@ -48,7 +49,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
    ```json
    {
      "dependencies": {
-       "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.0.0"
+       "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.0"
      }
    }
    ```
@@ -58,7 +59,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
 
 To install a specific version, append the version tag to the Git URL:
 ```json
-"com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.0.0"
+"com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.0"
 ```
 
 ## Requirements
@@ -71,21 +72,28 @@ To install a specific version, append the version tag to the Git URL:
 ### Access Editor Tools
 
 - **Log Source Compiler**: `Tools > QBS > Logs > Log Source Compiler`
+- **Enum Generator**: `Tools > QBS > Enum Generator`
 
 ### Generate Enums
 
-1. Open Log Source Compiler window
-2. Navigate to the "Enum Generation" tab
-3. Configure enum settings (name, namespace, type, backing type)
-4. Add enum keys
-5. Click "Generate Code" to copy to clipboard
+1. Open Enum Generator (`Tools > QBS > Enum Generator`)
+2. Configure enum settings (name, namespace, type, backing type)
+3. Add enum keys (and flag combinations if using a Flags enum)
+4. Click "Generate Enum" — source is displayed and can be copied to clipboard
 
 ### Compile Log Sources
 
-1. Open Log Source Compiler window
-2. **Source Fetch Tab**: Select folder containing source files
-3. **Enum Generation Tab**: Generate log channel enums
-4. **Source Compilation Tab**: Configure assembly references and compile to DLL
+1. Open Log Source Compiler (`Tools > QBS > Logs > Log Source Compiler`)
+2. Add or remove LogChannel enum keys in the Enum Generation section
+3. Click "Generate Enum" — reads sources from `RawSource~` and generates the enum + string utilities
+4. Click "Generate DLL" — compiles into runtime and editor DLLs under `Assets/Plugins/Log/`
+
+### Use Enum Utility Source Generators
+
+1. Add `using QBS.SourceGenerators.GeneratorDiscoveryHelpers;` to your file
+2. Annotate any enum with `[EnumUtilities(EnumUtilsGenOptions.All)]`
+3. Utilities are generated on next compile — no editor window required
+4. Access via `MyEnumUtils.Values`, `.ToStringFast()`, and `.HasFlagFast()`
 
 ## Package Structure
 
@@ -100,8 +108,10 @@ QBS-Core/
             ├── Editor/                # Editor tools
             │   ├── DLLGeneration/
             │   ├── EnumGeneration/
-            │   ├── Log/
-            │   └── StringEnumGeneration/
+            │   └── Log/
+            ├── Plugins/               # Precompiled DLLs
+            │   ├── Roslyn/Editor/     # Roslyn compiler DLLs (editor-only)
+            │   └── SourceGen/         # Roslyn source generator DLLs
             ├── RawSource~/            # Raw source files (excluded from builds)
             ├── Documentation~/        # Documentation (excluded from builds)
             ├── package.json           # Package manifest

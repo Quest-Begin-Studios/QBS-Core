@@ -15,8 +15,23 @@
 - **Flag Combinations**: Define named combinations of flags
 
 #### String Enum Generator
-- Generate string-based enumerations for type-safe string constants
-- Useful for serialization and configuration
+- Fast string representation for enum values — powered by the Enum Utility Source Generators via `GenerateToStringFast`
+- Generated at compile time; no reflection overhead
+
+### ⚡ Enum Utility Source Generators
+
+Compile-time code generation via Roslyn. Annotate any enum with `[EnumUtilities]` and utility methods are generated automatically on the next compile — no editor window, no runtime reflection.
+
+**Namespace**: `QBS.SourceGenerators.GeneratorDiscoveryHelpers`
+
+**Generation Options** (`EnumUtilsGenOptions` flags, combinable with `|`):
+
+| Option | Generated Member | Description |
+|--------|-----------------|-------------|
+| `GenerateToStringFast` | `ToStringFast()` extension | Switch-based string lookup; no reflection |
+| `GenerateHasFlagFast` | `HasFlagFast(T flag)` extension | Bitwise flag check; no boxing |
+| `GenerateValuesArray` | `<EnumName>Utils.Values` | `ImmutableArray<T>` of all enum values |
+| `All` | All of the above | All options enabled |
 
 ### 📝 Log System
 
@@ -26,9 +41,8 @@ A powerful editor tool for managing logging channels and compiling log sources i
 **Access**: `Tools > QBS > Logs > Log Source Compiler`
 
 **Features**:
-- **Source Fetch**: Collect and manage log source files
-- **Enum Generation**: Create log channel enumerations
-- **Source Compilation**: Compile sources into runtime/editor DLLs
+- **Enum Generation**: Configure LogChannel enum keys (name/type/namespace are pre-configured)
+- **Source Compilation**: Reads raw sources from `RawSource~`, generates the enum + `ToStringFast` utility, then compiles into runtime/editor DLLs
 - **Default Channels**: Network, AI, Physics, Audio, UI, Gameplay, Animation, Input, Save/Load, Dialogue, Inventory, Quest, Combat
 
 ### 🔨 DLL Generation
@@ -62,7 +76,7 @@ Add to your `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.0.0"
+    "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.0"
   }
 }
 ```
@@ -79,9 +93,10 @@ Add to your `Packages/manifest.json`:
 ```csharp
 using QBS.Core.Editor;
 
-// Access via Tools > QBS > Logs > Log Source Compiler
-// Navigate to the "Enum Generation" tab
-// Configure your enum settings and generate code
+// Access via Tools > QBS > Enum Generator
+// Configure enum settings (name, namespace, type, backing type)
+// Add enum keys, then click "Generate Enum"
+// Generated source is displayed and can be copied to clipboard
 ```
 
 ### Log Source Compilation
@@ -89,28 +104,68 @@ using QBS.Core.Editor;
 ```csharp
 // Access via Tools > QBS > Logs > Log Source Compiler
 
-// 1. Source Fetch Tab: Select folder containing log source files
-// 2. Enum Generation Tab: Generate log channel enums
-// 3. Source Compilation Tab: Compile into DLL with assembly references
+// 1. Add or remove LogChannel enum keys in the Enum Generation section
+// 2. Click 'Generate Enum' — reads sources from RawSource~ and generates
+//    the enum + ToStringFast utility code
+// 3. Click 'Generate DLL' — compiles all sources into runtime and editor
+//    DLLs under Assets/Plugins/Log/
 ```
 
 ### DLL Generation (Programmatic)
 
 ```csharp
 using QBS.Core.Editor;
+using System.Collections.Generic;
 
-var parameters = new DLLGenerationParameters
+var sources = new List<SourceFile>
 {
-    SourceFiles = new List<SourceFile> { /* your sources */ },
-    OutputPath = "Assets/GeneratedDLLs/MyAssembly.dll",
-    AssemblyName = "MyAssembly",
-    IsRuntimeCompiler = true,
-    RuntimeAssemblyReferences = new List<string>(),
-    ScriptingSymbols = new List<string>()
+    new SourceFile(mySourceCode, "MyFile.cs")
 };
 
-var helper = new DLLGenerationHelper();
-bool success = helper.GenerateDLL(parameters);
+// Sources are automatically split into runtime and editor DLLs
+// based on whether they reference editor-specific namespaces.
+// Output: Assets/Plugins/<outputDLLFolderName>/Runtime/<dllName>.dll
+//         Assets/Plugins/<outputDLLFolderName>/Editor/<dllName>-Editor.dll
+bool success = DLLGenerationHelper.TryGeneratingDLL(
+    sources,
+    outputDLLFolderName: "MyAssembly",
+    dllName: "MyAssembly",
+    runtimeAssemblyReferences: null,
+    editorAssemblyReferences: null,
+    scriptingSymbols: null
+);
+```
+
+### Enum Utility Source Generators
+
+```csharp
+using QBS.SourceGenerators.GeneratorDiscoveryHelpers;
+
+[EnumUtilities(EnumUtilsGenOptions.GenerateHasFlagFast
+             | EnumUtilsGenOptions.GenerateValuesArray
+             | EnumUtilsGenOptions.GenerateToStringFast)]
+public enum MyStatus
+{
+    Active,
+    Inactive,
+    Pending
+}
+
+// After compile, MyStatusUtils is generated automatically:
+string s   = MyStatus.Active.ToStringFast();               // "Active"
+bool hit   = MyStatus.Active.HasFlagFast(MyStatus.Active); // true
+var values = MyStatusUtils.Values;                         // ImmutableArray<MyStatus>
+```
+
+Works on nested types too:
+
+```csharp
+public class MyClass
+{
+    [EnumUtilities(EnumUtilsGenOptions.All)]
+    public enum NestedEnum { A, B, C }
+}
+// Generated utility class: MyClass.NestedEnumUtils
 ```
 
 ## Package Structure
@@ -122,12 +177,16 @@ com.qbs.core/
 │   └── QBS.Core.asmdef
 │
 ├── Editor/
-│   ├── DLLGeneration/             # Runtime DLL compilation
-│   ├── EnumGeneration/            # Enum code generation
-│   ├── Log/                       # Log system tools
-│   ├── StringEnumGeneration/      # String enum generation
+│   ├── DLLGeneration/             # Roslyn-based DLL compilation
+│   ├── EnumGeneration/            # Enum code generation editor tool
+│   ├── Log/                       # Log system and compiler tools
 │   └── QBS.Core.Editor.asmdef
 │
+├── Plugins/
+│   ├── Roslyn/Editor/             # Roslyn compiler DLLs (editor-only)
+│   └── SourceGen/                 # Roslyn source generator DLLs
+│
+├── RawSource~/                    # Raw log source files (excluded from builds)
 └── Documentation~/                # Additional documentation
 ```
 
@@ -137,14 +196,17 @@ com.qbs.core/
 
 - `QBS.Core` - Runtime utilities
 - `QBS.Core.Editor` - Editor tools and generators
+- `QBS.SourceGenerators.GeneratorDiscoveryHelpers` - Source generator attributes and options
 
 ### Key Classes
 
-- `EnumGeneratorComponent` - Enum generation UI and logic
-- `LogSourceCompiler` - Log channel management and compilation
-- `DLLGenerator` - Roslyn-based DLL compilation
-- `DLLGenerationHelper` - High-level DLL generation interface
+- `EnumGeneratorComponent` - Enum generation UI and logic (shared by Enum Generator window and Log Source Compiler)
+- `LogSourceCompiler` - Log channel management and DLL compilation
+- `DLLGenerator` - Low-level Roslyn-based DLL compilation
+- `DLLGenerationHelper` - High-level static API; auto-splits sources into runtime/editor and retries on missing assembly errors
 - `AssemblyUtilities` - Assembly reflection helpers
+- `EnumUtilitiesAttribute` - Marks enums for compile-time utility generation via Source Generators
+- `EnumUtilsGenOptions` - Flags controlling which utilities are generated (`ToStringFast`, `HasFlagFast`, `ValuesArray`)
 
 ## Support
 

@@ -1,6 +1,6 @@
 {
   "name": "com.qbs.core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "QBS Core",
   "description": "Core package for Quest Begins Studios",
   "unity": "6000.0",
