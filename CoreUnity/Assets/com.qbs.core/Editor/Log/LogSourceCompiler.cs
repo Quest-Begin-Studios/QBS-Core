@@ -215,7 +215,7 @@ namespace QBS.Core.Editor
             
             for (var i = 0; i < _enumGenerator.FlagCombinations.Count; i++)
             {
-                enumKeys[i] = _enumGenerator.FlagCombinations[i].Name;
+                enumKeys[enumKeysCount + i] = _enumGenerator.FlagCombinations[i].Name;
             }
 
             var toStringNoBoxSource = EnumUtilsSourceWriter.CreateUtilsFromEnumDetails

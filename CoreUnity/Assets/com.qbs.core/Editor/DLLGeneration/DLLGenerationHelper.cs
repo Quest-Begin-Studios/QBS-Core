@@ -67,7 +67,10 @@ namespace QBS.Core.Editor
             //clean up if either generation failed
             if (!(runtimeGenSuccess && editorGenSuccess))
             {
-                File.Delete(pathToPluginsFolder);
+                if (Directory.Exists(pathToPluginsFolder))
+                {
+                    Directory.Delete(pathToPluginsFolder, recursive: true);
+                }
             }
 
             return runtimeGenSuccess && editorGenSuccess;
@@ -145,8 +148,7 @@ namespace QBS.Core.Editor
         }
 
 
-        private static bool RecursivelyTryCompilation(DLLGenerator dllGenerator, DLLGenerationParameters generationParameters, int maxTries = 3,
-            int currentTry = 0)
+        private static bool RecursivelyTryCompilation(DLLGenerator dllGenerator, DLLGenerationParameters generationParameters, int maxTries = 3, int currentTry = 0)
         {
             var compilationResult = dllGenerator.GenerateDLL(generationParameters, out var errorDetails);
 
