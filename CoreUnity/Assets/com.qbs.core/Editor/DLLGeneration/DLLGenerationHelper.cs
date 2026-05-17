@@ -141,7 +141,13 @@ namespace QBS.Core.Editor
 
             var pathToDLL = GetPathForDLL(compileForRuntime, dllName, pathToPluginsFolder);
 
-            var generationParameters = new DLLGenerationParameters(sources, pathToDLL, extraReferenceAssemblies, scriptingSymbols);
+            var generationParameters = new DLLGenerationParameters
+            (
+                sources,
+                pathToDLL,
+                extraReferenceAssemblies,
+                scriptingSymbols
+            );
 
             var dllGenerator = new DLLGenerator();
             return RecursivelyTryCompilation(dllGenerator, generationParameters);
@@ -158,6 +164,8 @@ namespace QBS.Core.Editor
                 if (errorDetails.ErrorCount == 0)
                 {
                     // Compilation failed but not due to code errors
+                    LogCompilationErrors(errorDetails, generationParameters);
+
                     return false;
                 }
 
@@ -200,13 +208,36 @@ namespace QBS.Core.Editor
                 // If no missing assembly reference errors were found, return false
                 if (!missingAssemblyReferenceErrorFound)
                 {
+                    LogCompilationErrors(errorDetails, generationParameters);
                     return false;
                 }
 
                 return RecursivelyTryCompilation(dllGenerator, generationParameters, maxTries, currentTry);
             }
 
+            if (!compilationResult)
+            {
+                LogCompilationErrors(errorDetails, generationParameters);
+            }
+
             return compilationResult;
+        }
+
+        private static void LogCompilationErrors(DLLGenerationErrorDetails errorDetails, DLLGenerationParameters generationParameters)
+        {
+            var message = new System.Text.StringBuilder();
+            message.AppendLine($"[DLLGeneration] Compilation failed with {errorDetails.ErrorCount} error(s):");
+            foreach (var diagnostic in errorDetails.Diagnostics)
+            {
+                message.AppendLine($"  [{diagnostic.Id}] {diagnostic.File}({diagnostic.Line},{diagnostic.Column}): {diagnostic.Message}");
+            }
+            Debug.LogError(message.ToString());
+
+            Debug.Log($"[DLLGeneration] Writing input files to temp cache - {Application.temporaryCachePath}");
+            foreach (var files in generationParameters.Sources)
+            {
+                File.WriteAllText(Path.Combine(Application.temporaryCachePath, Path.GetFileName(files.FilePath)), files.SourceContent);
+            }
         }
 
         /// <summary>

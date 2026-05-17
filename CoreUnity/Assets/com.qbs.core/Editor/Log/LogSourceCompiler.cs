@@ -10,7 +10,7 @@ using UnityEngine.Assemblies;
 
 namespace QBS.Core.Editor
 {
-    public class LogSourceCompiler : EditorWindow
+    public partial class LogSourceCompiler : EditorWindow
     {
         private const string NamespaceStr = "QBS.Core";
         private const string LogChannelsName = "LogChannel";
@@ -165,7 +165,11 @@ namespace QBS.Core.Editor
 
             if (GUILayout.Button("Generate Enum", GUILayout.Height(30)))
             {
-                ReadSourcesFromRawSourceFolder();
+                _sourceFiles.Clear();
+                _runtimeAssemblyReferences.Clear();
+                _editorAssemblyReferences.Clear();
+
+                ReadSources(_sourceFiles, _runtimeAssemblyReferences, _editorAssemblyReferences);
 
                 var enumGenSuccess = _enumGenerator.GenerateEnum();
 
@@ -202,6 +206,7 @@ namespace QBS.Core.Editor
             }
         }
 
+
         private void GenerateEnumHelpers()
         {
             var enumKeysCount = _enumGenerator.EnumKeys.Count;
@@ -212,7 +217,7 @@ namespace QBS.Core.Editor
             {
                 enumKeys[i] = _enumGenerator.EnumKeys[i];
             }
-            
+
             for (var i = 0; i < _enumGenerator.FlagCombinations.Count; i++)
             {
                 enumKeys[enumKeysCount + i] = _enumGenerator.FlagCombinations[i].Name;
@@ -233,13 +238,9 @@ namespace QBS.Core.Editor
             _sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
         }
 
-        private void ReadSourcesFromRawSourceFolder()
+        private static bool ReadSources(List<SourceFile> sourceFiles, List<string> runtimeAssemblyReferences, List<string> editorAssemblyReferences)
         {
-            _sourceFiles.Clear();
-            _runtimeAssemblyReferences.Clear();
-            _editorAssemblyReferences.Clear();
-
-            var packagePath = "Packages/com.qbs.core";
+            const string packagePath = "Packages/com.qbs.core";
             var rawSourceFolder = Path.Combine(packagePath, "RawSource~/LogSource");
 
             if (!Directory.Exists(rawSourceFolder))
@@ -250,19 +251,15 @@ namespace QBS.Core.Editor
                 if (!Directory.Exists(rawSourceFolder))
                 {
                     Debug.LogError($"RawSource~ folder not found at fallback path: {rawSourceFolder}");
-                    return;
+                    return false;
                 }
 
                 Debug.Log($"Using fallback RawSource~ folder at: {rawSourceFolder}");
             }
 
             var fileList = new List<string>();
-
-            var csFiles = Directory.GetFiles(rawSourceFolder, "*.cs", SearchOption.AllDirectories);
-            fileList.AddRange(csFiles);
-
-            var txtFiles = Directory.GetFiles(rawSourceFolder, "*.txt", SearchOption.AllDirectories);
-            fileList.AddRange(txtFiles);
+            fileList.AddRange(Directory.GetFiles(rawSourceFolder, "*.cs", SearchOption.AllDirectories));
+            fileList.AddRange(Directory.GetFiles(rawSourceFolder, "*.txt", SearchOption.AllDirectories));
 
             foreach (var file in fileList)
             {
@@ -270,14 +267,12 @@ namespace QBS.Core.Editor
                 var sourceContent = reader.ReadToEnd();
 
                 var fileName = Path.GetFileName(file);
-                var extension = Path.GetExtension(fileName);
-
-                if (extension != ".cs")
+                if (Path.GetExtension(fileName) != ".cs")
                 {
                     fileName = Path.GetFileNameWithoutExtension(fileName) + ".cs";
                 }
 
-                _sourceFiles.Add(new SourceFile(sourceContent, fileName));
+                sourceFiles.Add(new SourceFile(sourceContent, fileName));
             }
 
             // Read JSON file for assembly references
@@ -285,35 +280,39 @@ namespace QBS.Core.Editor
             if (!File.Exists(jsonFile))
             {
                 Debug.LogWarning($"AssemblyReferences.json not found at: {jsonFile}");
-                return;
+                return false;
             }
 
             try
             {
-                var jsonContent = File.ReadAllText(jsonFile);
-                var assemblyReferences = JsonUtility.FromJson<AssemblyReferencesData>(jsonContent);
-                if (assemblyReferences != null)
+                var assemblyReferences = JsonUtility.FromJson<AssemblyReferencesData>(File.ReadAllText(jsonFile));
+                if (assemblyReferences == null)
                 {
-                    if (assemblyReferences.RuntimeAssemblies is { Length: > 0 })
-                    {
-                        _runtimeAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.RuntimeAssemblies));
-                        Debug.Log($"Loaded {assemblyReferences.RuntimeAssemblies.Length} runtime assembly references");
-                    }
+                    return false;
+                }
 
-                    if (assemblyReferences.EditorAssemblies is { Length: > 0 })
-                    {
-                        _editorAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.EditorAssemblies));
-                        Debug.Log($"Loaded {assemblyReferences.EditorAssemblies.Length} editor assembly references");
-                    }
+                if (assemblyReferences.RuntimeAssemblies is { Length: > 0 })
+                {
+                    runtimeAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.RuntimeAssemblies));
+                    Debug.Log($"Loaded {assemblyReferences.RuntimeAssemblies.Length} runtime assembly references");
+                }
+
+                if (assemblyReferences.EditorAssemblies is { Length: > 0 })
+                {
+                    editorAssemblyReferences.AddRange(ResolveAssemblyPaths(assemblyReferences.EditorAssemblies));
+                    Debug.Log($"Loaded {assemblyReferences.EditorAssemblies.Length} editor assembly references");
                 }
             }
             catch (Exception e)
             {
                 Debug.LogWarning($"Failed to parse AssemblyReferences.json: {e.Message}");
+                return false;
             }
+
+            return true;
         }
 
-        private List<string> ResolveAssemblyPaths(string[] assemblyNames)
+        private static List<string> ResolveAssemblyPaths(string[] assemblyNames)
         {
             var resolvedPaths = new List<string>();
             var loadedAssemblies = CurrentAssemblies.GetLoadedAssemblies();
