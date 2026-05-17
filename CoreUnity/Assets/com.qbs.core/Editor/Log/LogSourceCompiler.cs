@@ -212,8 +212,8 @@ namespace QBS.Core.Editor
             {
                 enumKeys[i] = _enumGenerator.EnumKeys[i];
             }
-
-            for (var i = enumKeysCount; i < allKeysCount; i++)
+            
+            for (var i = 0; i < _enumGenerator.FlagCombinations.Count; i++)
             {
                 enumKeys[i] = _enumGenerator.FlagCombinations[i].Name;
             }
