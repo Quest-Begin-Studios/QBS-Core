@@ -2,7 +2,7 @@
   "name": "com.qbs.core",
   "version": "1.1.0",
   "displayName": "QBS Core",
-  "description": "Core package for Quest Begins Studios",
+  "description": "Core package for Quest Begin Studios",
   "unity": "6000.0",
   "dependencies": {},
  "keywords": [
@@ -10,7 +10,7 @@
     "Helpers"
   ],
   "author": {
-    "name": "Quest Begins Studios",
+    "name": "Quest Begin Studios",
     "email": "questbeginstudios@gmail.com",
     "url": "mailto:questbeginstudios@gmail.com"
   }
