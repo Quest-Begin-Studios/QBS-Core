@@ -58,8 +58,8 @@ Compile C# source files into DLLs at runtime using Roslyn compiler.
 
 ### 🛠️ Utilities
 
-#### Assembly Utilities
-Helper methods for working with Unity assemblies and reflection.
+#### Assembly Compatibility
+`AssemblyCompat` wraps the assembly lookup APIs that changed in Unity 6000.5, so the same call works across every 6000.x editor.
 
 ## Installation
 
@@ -76,7 +76,7 @@ Add to your `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.0"
+    "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
   }
 }
 ```
@@ -85,6 +85,8 @@ Add to your `Packages/manifest.json`:
 
 - **Unity Version**: 6000.0 or higher
 - **Dependencies**: None
+
+Unity 6000.5 replaced `AppDomain.CurrentDomain.GetAssemblies()` and `Assembly.Location` with `UnityEngine.Assemblies.CurrentAssemblies` and `Assembly.GetLoadedAssemblyPath()`, which are required under CoreCLR. The package picks the correct API for the running editor through `AssemblyCompat`, so no consumer-side version guards are needed.
 
 ## Usage
 
@@ -173,7 +175,7 @@ public class MyClass
 ```
 com.qbs.core/
 ├── Runtime/
-│   ├── AssemblyUtilities.cs       # Assembly helper utilities
+│   ├── AssemblyCompat.cs          # Version-safe assembly lookups
 │   └── QBS.Core.asmdef
 │
 ├── Editor/
@@ -204,7 +206,7 @@ com.qbs.core/
 - `LogSourceCompiler` - Log channel management and DLL compilation
 - `DLLGenerator` - Low-level Roslyn-based DLL compilation
 - `DLLGenerationHelper` - High-level static API; auto-splits sources into runtime/editor and retries on missing assembly errors
-- `AssemblyUtilities` - Assembly reflection helpers
+- `AssemblyCompat` - Version-safe assembly lookups (`GetLoadedAssemblies`, `GetAssemblyPath`)
 - `EnumUtilitiesAttribute` - Marks enums for compile-time utility generation via Source Generators
 - `EnumUtilsGenOptions` - Flags controlling which utilities are generated (`ToStringFast`, `HasFlagFast`, `ValuesArray`)
 

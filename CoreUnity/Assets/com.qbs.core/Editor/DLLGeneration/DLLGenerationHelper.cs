@@ -5,7 +5,6 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.CSharp;
 using UnityEngine;
-using UnityEngine.Assemblies;
 
 namespace QBS.Core.Editor
 {
@@ -169,7 +168,7 @@ namespace QBS.Core.Editor
                     return false;
                 }
 
-                var loadedAssemblies = CurrentAssemblies.GetLoadedAssemblies();
+                var loadedAssemblies = AssemblyCompat.GetLoadedAssemblies();
                 var missingAssemblyReferenceErrorFound = false;
                 foreach (var errorDiagnostic in errorDetails.Diagnostics)
                 {
@@ -198,9 +197,13 @@ namespace QBS.Core.Editor
                         )
                     );
 
-                    if (assembly != null && !string.IsNullOrEmpty(assembly.GetLoadedAssemblyPath()))
+                    if (assembly != null)
                     {
-                        generationParameters.ExtraAssembliesToReference.Add(assembly.Location);
+                        var assemblyPath = AssemblyCompat.GetAssemblyPath(assembly);
+                        if (!string.IsNullOrEmpty(assemblyPath))
+                        {
+                            generationParameters.ExtraAssembliesToReference.Add(assemblyPath);
+                        }
                     }
                 }
 

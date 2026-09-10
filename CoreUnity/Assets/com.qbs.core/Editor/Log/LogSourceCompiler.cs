@@ -6,7 +6,6 @@ using QBS.SourceGenerators;
 using QBS.SourceGenerators.GeneratorDiscoveryHelpers;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Assemblies;
 
 namespace QBS.Core.Editor
 {
@@ -315,7 +314,7 @@ namespace QBS.Core.Editor
         private static List<string> ResolveAssemblyPaths(string[] assemblyNames)
         {
             var resolvedPaths = new List<string>();
-            var loadedAssemblies = CurrentAssemblies.GetLoadedAssemblies();
+            var loadedAssemblies = AssemblyCompat.GetLoadedAssemblies();
 
             foreach (var assemblyName in assemblyNames)
             {
@@ -326,7 +325,7 @@ namespace QBS.Core.Editor
 
                 if (assembly != null)
                 {
-                    var assemblyPath = assembly.GetLoadedAssemblyPath();
+                    var assemblyPath = AssemblyCompat.GetAssemblyPath(assembly);
                     resolvedPaths.Add(assemblyPath);
                     Debug.Log($"Resolved assembly '{assemblyName}' to: {assemblyPath}");
                 }

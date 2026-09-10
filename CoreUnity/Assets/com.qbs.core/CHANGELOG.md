@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-09-10
+
+### Added
+- `QBS.Core` runtime assembly holding `AssemblyCompat`, a wrapper over the assembly lookup APIs that changed in Unity 6000.5. `GetLoadedAssemblies()` and `GetAssemblyPath(assembly)` call `UnityEngine.Assemblies.CurrentAssemblies` and `Assembly.GetLoadedAssemblyPath()` on 6000.5 and later, and fall back to `AppDomain.CurrentDomain.GetAssemblies()` and `Assembly.Location` below it. Downstream packages can reference the assembly instead of repeating the version guard.
+
+### Changed
+- `LogSourceCompiler` and `DLLGenerationHelper` resolve assemblies through `AssemblyCompat`, so the package compiles again on Unity 6000.0 through 6000.4, where the `UnityEngine.Assemblies` namespace does not exist
+
+### Fixed
+- `DLLGenerationHelper` tested `GetLoadedAssemblyPath()` for emptiness and then added `Assembly.Location` to the extra reference list. Under CoreCLR, where assemblies can be loaded from memory, `Location` is empty, so a recompilation retry was handed an empty path instead of the assembly it had just resolved. Both the test and the value now come from the same lookup.
+
 ## [1.1.0] - 2026-05-12
 
 ### Added

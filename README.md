@@ -25,7 +25,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
 - **Runtime & Editor Support**: Generate both runtime and editor assemblies
 
 ### 🛠️ Utilities
-- **Assembly Utilities**: Helper methods for Unity assembly management and reflection
+- **Assembly Compatibility**: `AssemblyCompat` resolves loaded assemblies and their paths through the right API for the running editor, across the Unity 6000.5 assembly API change
 
 ## Installation
 
@@ -49,7 +49,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
    ```json
    {
      "dependencies": {
-       "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.0"
+       "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
      }
    }
    ```
@@ -59,12 +59,12 @@ QBS-Core provides essential development tools for building Unity projects. It in
 
 To install a specific version, append the version tag to the Git URL:
 ```json
-"com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.0"
+"com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
 ```
 
 ## Requirements
 
-- **Unity Version**: 6000.0 or higher
+- **Unity Version**: 6000.0 or higher — the package compiles on both sides of the Unity 6000.5 assembly API change
 - **Dependencies**: None (dependency-free package)
 
 ## Quick Start
@@ -103,7 +103,7 @@ QBS-Core/
     └── Assets/
         └── com.qbs.core/              # Unity Package
             ├── Runtime/               # Runtime scripts
-            │   ├── AssemblyUtilities.cs
+            │   ├── AssemblyCompat.cs
             │   └── QBS.Core.asmdef
             ├── Editor/                # Editor tools
             │   ├── DLLGeneration/
@@ -122,7 +122,7 @@ QBS-Core/
 
 ## Documentation
 
-For detailed API documentation and usage examples, see the [package README](CoreUnity/Assets/com.qbs.core/README.md).
+For detailed API documentation and usage examples, see the [package README](CoreUnity/Assets/com.qbs.core/Documentation~/README.md).
 
 ## Development
 
