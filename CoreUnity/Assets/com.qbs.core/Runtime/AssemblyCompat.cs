@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.Reflection;
-#if UNITY_6000_5_OR_NEWER
+#if UNITY_6000_4_OR_NEWER
 using UnityEngine;
 using UnityEngine.Assemblies;
 #else
@@ -11,7 +11,7 @@ namespace QBS.Core
 {
     /// <summary>
     ///     Wraps the assembly lookup APIs that differ across Unity versions.
-    ///     Unity 6000.5 added <c>UnityEngine.Assemblies.CurrentAssemblies</c> and <c>Assembly.GetLoadedAssemblyPath()</c>,
+    ///     Unity 6000.4 added <c>UnityEngine.Assemblies.CurrentAssemblies</c> and <c>Assembly.GetLoadedAssemblyPath()</c>,
     ///     which are required under CoreCLR where assemblies can be loaded from memory and <c>Assembly.Location</c> is empty.
     ///     Earlier versions fall back to the AppDomain equivalents.
     /// </summary>
@@ -23,7 +23,7 @@ namespace QBS.Core
         /// <returns>A collection of loaded assemblies</returns>
         public static IEnumerable<Assembly> GetLoadedAssemblies()
         {
-#if UNITY_6000_5_OR_NEWER
+#if UNITY_6000_4_OR_NEWER
             return CurrentAssemblies.GetLoadedAssemblies();
 #else
             return AppDomain.CurrentDomain.GetAssemblies();
@@ -37,7 +37,7 @@ namespace QBS.Core
         /// <returns>The path to the assembly, or null/empty when the path is not known</returns>
         public static string GetAssemblyPath(Assembly assembly)
         {
-#if UNITY_6000_5_OR_NEWER
+#if UNITY_6000_4_OR_NEWER
             return assembly.GetLoadedAssemblyPath();
 #else
             return assembly.Location;

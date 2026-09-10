@@ -8,10 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.1] - 2026-09-10
 
 ### Added
-- `QBS.Core` runtime assembly holding `AssemblyCompat`, a wrapper over the assembly lookup APIs that changed in Unity 6000.5. `GetLoadedAssemblies()` and `GetAssemblyPath(assembly)` call `UnityEngine.Assemblies.CurrentAssemblies` and `Assembly.GetLoadedAssemblyPath()` on 6000.5 and later, and fall back to `AppDomain.CurrentDomain.GetAssemblies()` and `Assembly.Location` below it. Downstream packages can reference the assembly instead of repeating the version guard.
+- `QBS.Core` runtime assembly holding `AssemblyCompat`, a wrapper over the assembly lookup APIs that changed in Unity 6000.4. `GetLoadedAssemblies()` and `GetAssemblyPath(assembly)` call `UnityEngine.Assemblies.CurrentAssemblies` and `Assembly.GetLoadedAssemblyPath()` on newer editors, and fall back to `AppDomain.CurrentDomain.GetAssemblies()` and `Assembly.Location` on older ones. The guard is `UNITY_6000_4_OR_NEWER`: both APIs are documented in the 6000.4 script reference and absent from 6000.3. Downstream packages can reference the assembly instead of repeating the version guard.
 
 ### Changed
-- `LogSourceCompiler` and `DLLGenerationHelper` resolve assemblies through `AssemblyCompat`, so the package compiles again on Unity 6000.0 through 6000.4, where the `UnityEngine.Assemblies` namespace does not exist
+- `LogSourceCompiler` and `DLLGenerationHelper` resolve assemblies through `AssemblyCompat`, so the package compiles again on Unity 6000.0 through 6000.3, where the `UnityEngine.Assemblies` namespace does not exist
 
 ### Fixed
 - `DLLGenerationHelper` tested `GetLoadedAssemblyPath()` for emptiness and then added `Assembly.Location` to the extra reference list. Under CoreCLR, where assemblies can be loaded from memory, `Location` is empty, so a recompilation retry was handed an empty path instead of the assembly it had just resolved. Both the test and the value now come from the same lookup.

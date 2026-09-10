@@ -25,7 +25,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
 - **Runtime & Editor Support**: Generate both runtime and editor assemblies
 
 ### 🛠️ Utilities
-- **Assembly Compatibility**: `AssemblyCompat` resolves loaded assemblies and their paths through the right API for the running editor, across the Unity 6000.5 assembly API change
+- **Assembly Compatibility**: `AssemblyCompat` resolves loaded assemblies and their paths through the right API for the running editor, across the Unity 6000.4 assembly API change
 
 ## Installation
 
@@ -64,7 +64,7 @@ To install a specific version, append the version tag to the Git URL:
 
 ## Requirements
 
-- **Unity Version**: 6000.0 or higher — the package compiles on both sides of the Unity 6000.5 assembly API change
+- **Unity Version**: 6000.0 or higher — the package compiles on both sides of the Unity 6000.4 assembly API change
 - **Dependencies**: None (dependency-free package)
 
 ## Quick Start

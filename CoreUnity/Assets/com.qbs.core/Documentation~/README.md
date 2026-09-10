@@ -59,7 +59,7 @@ Compile C# source files into DLLs at runtime using Roslyn compiler.
 ### 🛠️ Utilities
 
 #### Assembly Compatibility
-`AssemblyCompat` wraps the assembly lookup APIs that changed in Unity 6000.5, so the same call works across every 6000.x editor.
+`AssemblyCompat` wraps the assembly lookup APIs that changed in Unity 6000.4, so the same call works across every 6000.x editor.
 
 ## Installation
 
@@ -86,7 +86,7 @@ Add to your `Packages/manifest.json`:
 - **Unity Version**: 6000.0 or higher
 - **Dependencies**: None
 
-Unity 6000.5 replaced `AppDomain.CurrentDomain.GetAssemblies()` and `Assembly.Location` with `UnityEngine.Assemblies.CurrentAssemblies` and `Assembly.GetLoadedAssemblyPath()`, which are required under CoreCLR. The package picks the correct API for the running editor through `AssemblyCompat`, so no consumer-side version guards are needed.
+Unity 6000.4 replaced `AppDomain.CurrentDomain.GetAssemblies()` and `Assembly.Location` with `UnityEngine.Assemblies.CurrentAssemblies` and `Assembly.GetLoadedAssemblyPath()`, which are required under CoreCLR. The package picks the correct API for the running editor through `AssemblyCompat`, so no consumer-side version guards are needed.
 
 ## Usage
 
