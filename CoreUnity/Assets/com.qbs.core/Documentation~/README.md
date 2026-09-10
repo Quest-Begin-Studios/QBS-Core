@@ -67,7 +67,7 @@ Compile C# source files into DLLs at runtime using Roslyn compiler.
 
 1. Open Unity Package Manager (`Window > Package Manager`)
 2. Click `+` → `Add package from git URL`
-3. Enter: `https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core`
+3. Enter: `https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core`
 
 ### Via manifest.json
 
@@ -76,7 +76,7 @@ Add to your `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
+    "com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
   }
 }
 ```
@@ -213,7 +213,7 @@ com.qbs.core/
 ## Support
 
 - **Email**: questbeginstudios@gmail.com
-- **Issues**: [GitHub Issues](https://github.com/QuestBeginStudios/QBS-Core/issues)
+- **Issues**: [GitHub Issues](https://github.com/Quest-Begin-Studios/QBS-Core/issues)
 
 ## License
 

@@ -37,7 +37,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
 4. Select `Add package from git URL`
 5. Enter the following URL:
    ```
-   https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core
+   https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core
    ```
 6. Click `Add`
 
@@ -49,7 +49,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
    ```json
    {
      "dependencies": {
-       "com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
+       "com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
      }
    }
    ```
@@ -59,7 +59,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
 
 To install a specific version, append the version tag to the Git URL:
 ```json
-"com.qbs.core": "https://github.com/QuestBeginStudios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
+"com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
 ```
 
 ## Requirements
@@ -148,7 +148,7 @@ This project follows [Semantic Versioning](https://semver.org/):
 ## Support
 
 - **Email**: questbeginstudios@gmail.com
-- **Issues**: [GitHub Issues](https://github.com/QuestBeginStudios/QBS-Core/issues)
+- **Issues**: [GitHub Issues](https://github.com/Quest-Begin-Studios/QBS-Core/issues)
 
 ## License
 
