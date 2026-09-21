@@ -95,8 +95,7 @@ namespace QBS.Core
 			LogMessage($"( -_•)▄︻デ══━一 {message}", tag, color, LogLevel.Info, channel, context);
 		}
 
-		//Warning, Error and Fatal are deliberately not [Conditional]: the attribute strips the call at the
-		//call site, so a player built without ENABLE_LOGS would report nothing to a crash reporter at all.
+		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Warning(string message, string tag = null, Color color = default,
@@ -105,6 +104,8 @@ namespace QBS.Core
 			LogMessage(message, tag, color, LogLevel.Warning, channel, context);
 		}
 
+		//Error and Fatal alone are not [Conditional]: the attribute strips the call at the call site, so a
+		//player built without ENABLE_LOGS would report nothing to a crash reporter at all.
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, string tag = null, Color color = default,
