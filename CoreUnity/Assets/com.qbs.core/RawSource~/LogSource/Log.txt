@@ -95,7 +95,8 @@ namespace QBS.Core
 			LogMessage($"( -_•)▄︻デ══━一 {message}", tag, color, LogLevel.Info, channel, context);
 		}
 
-		[Conditional("ENABLE_LOGS")]
+		//Warning, Error and Fatal are deliberately not [Conditional]: the attribute strips the call at the
+		//call site, so a player built without ENABLE_LOGS would report nothing to a crash reporter at all.
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Warning(string message, string tag = null, Color color = default,
@@ -104,7 +105,6 @@ namespace QBS.Core
 			LogMessage(message, tag, color, LogLevel.Warning, channel, context);
 		}
 
-		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, string tag = null, Color color = default,
@@ -113,7 +113,6 @@ namespace QBS.Core
 			LogMessage(message, tag, color, LogLevel.Error, channel, context);
 		}
 
-		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, Exception exception, string tag = null, Color color = default,
@@ -122,7 +121,6 @@ namespace QBS.Core
 			LogMessageWithException(message, exception, tag, color, LogLevel.Error, channel, context);
 		}
 
-		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, string tag = null, Color color = default,
@@ -132,7 +130,6 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, Exception exception, string tag = null, Color color = default,
 			LogChannel channel = default, Object context = null)
@@ -141,7 +138,6 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
 		private static void LogMessage(string message, string tag, Color color,
 			LogLevel level, LogChannel channel, Object context)
 		{
@@ -271,7 +267,6 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnity(LogLevel level, string toString)
 		{
 			switch (level)
@@ -300,7 +295,6 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnityWithReference(LogLevel level, string toString, Object context)
 		{
 			switch (level)

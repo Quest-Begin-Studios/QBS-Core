@@ -27,9 +27,9 @@ namespace QBS.Core.Editor
                 LogChannelsName,
                 NamespaceStr,
                 EnumGeneratorComponent.EnumTypeOption.Flags,
-                EnumGeneratorComponent.BackingType.Int
+                EnumGeneratorComponent.BackingType.Long
             );
-            enumGenerator.ConfigureEnumKeys
+            enumGenerator.ConfigureReservedKeys
             (
                 LogChannelDefaults.BaseKeys,
                 LogChannelDefaults.FlagCombinations
@@ -43,18 +43,7 @@ namespace QBS.Core.Editor
 
             var capturedEnumCode = enumGenerator.GeneratedCode;
 
-            var enumKeysCount = enumGenerator.EnumKeys.Count;
-            var allKeysCount = enumKeysCount + enumGenerator.FlagCombinations.Count;
-            var enumKeys = new string[allKeysCount];
-            for (var i = 0; i < enumKeysCount; i++)
-            {
-                enumKeys[i] = enumGenerator.EnumKeys[i];
-            }
-
-            for (var i = 0; i < enumGenerator.FlagCombinations.Count; i++)
-            {
-                enumKeys[enumKeysCount + i] = enumGenerator.FlagCombinations[i].Name;
-            }
+            var enumKeys = enumGenerator.GetGeneratedKeyNames().ToArray();
 
             var toStringNoBoxSource = EnumUtilsSourceWriter.CreateUtilsFromEnumDetails
             (

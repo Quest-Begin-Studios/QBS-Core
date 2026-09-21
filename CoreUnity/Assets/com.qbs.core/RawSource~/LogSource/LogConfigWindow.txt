@@ -36,7 +36,7 @@ namespace QBS.Core.Editor
 			_runtimeSettings = LoadOrCreateRuntimeSettings();
 
 			// Activate all log channels in case a preference isn't set.
-			Log.EnabledChannels = (LogChannel)EditorPrefs.GetInt(LogEditorConstants.ActiveChannels, ~0);
+			Log.EnabledChannels = LogEditorUtility.ReadActiveChannels();
 			_minimumLevel = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel, 0);
 			_logsEnabled = LogEditorUtility.AreLogsEnabled();
 
@@ -281,7 +281,7 @@ namespace QBS.Core.Editor
 		private void WriteLogChannels(LogChannel channels)
 		{
 			Log.EnabledChannels = channels;
-			EditorPrefs.SetInt(LogEditorConstants.ActiveChannels, (int)channels);
+			LogEditorUtility.WriteActiveChannels(channels);
 
 			if (_runtimeSettings != null)
 			{
@@ -398,7 +398,7 @@ namespace QBS.Core.Editor
 		{
 			return values
 				.Cast<LogChannel>()
-				.Where(c => c != LogChannel.None && c != LogChannel.All && IsPowerOfTwo((int)c))
+				.Where(c => c != LogChannel.None && c != LogChannel.All && IsPowerOfTwo((long)c))
 				.OrderBy(c => c.ToString())
 				.ToList();
 		}
@@ -407,18 +407,18 @@ namespace QBS.Core.Editor
 		{
 			return values
 				.Cast<LogChannel>()
-				.Where(c => c != LogChannel.None && c != LogChannel.All && HasMultipleBitsSet((int)c))
+				.Where(c => c != LogChannel.None && c != LogChannel.All && HasMultipleBitsSet((long)c))
 				.OrderBy(c => c.ToString())
 				.Select(c => (c, c.ToString()))
 				.ToList();
 		}
 
-		private bool IsPowerOfTwo(int value)
+		private bool IsPowerOfTwo(long value)
 		{
 			return value != 0 && (value & value - 1) == 0;
 		}
 
-		private bool HasMultipleBitsSet(int value)
+		private bool HasMultipleBitsSet(long value)
 		{
 			if (value == 0)
 			{

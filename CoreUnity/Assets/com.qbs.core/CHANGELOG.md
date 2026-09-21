@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-09-21
+
+### Added
+
+- `EnumGeneratorComponent.ConfigureReservedKeys`, members injected into every generated enum ahead of the window's own keys and not editable there. `GetGeneratedKeyNames()` returns the emitted members in value order, and both the windowed and headless compilers build their `ToStringFast` helpers from it, so the helper can no longer disagree with the enum it is generated beside.
+- `LogChannelDefaults` gains the studio channels `Auth`, `Bridge`, `Sfs`, `Http` and `Build`, appended after the existing ten. The set is now documented as append-only and is injected as reserved keys: a consumer's Log Configuration window can add channels after them but cannot remove, insert before or reorder one. Packages log to these names against each consumer's own generated `Log.dll`, and renumbering them would repoint every channel mask already saved.
+- `LogEditorUtility.ReadActiveChannels` / `WriteActiveChannels`, which carry the editor's channel mask through `EditorPrefs` as a string. `EditorPrefs` has no `long`, and the mask no longer fits an `int`.
+
+### Changed
+
+- **`LogChannel` is generated as a `long`-backed flags enum** rather than `int`, raising the ceiling from 31 channels to 63. Consumers must regenerate `Assets/Plugins/Log/` (`Tools > QBS > Logs > Log Source Compiler`, or `LogSourceCompiler.GenerateLogDLLsHeadless` in CI) after upgrading; a stale `Log.dll` keeps its 32-bit enum and will not link against code compiled for the new one.
+- `RuntimeLogSettings.enabledChannels` is serialized as `long`. Unity serializes an enum field as 32 bits, which would silently drop every channel past the 32nd. Existing assets carry `-1` and keep deserializing to every channel enabled.
+- The editor's saved channel mask moved to the `QBS_Log_ActiveChannelMask` key. `EditorPrefs` entries are typed, so the 32-bit value under the old key is ignored and the first read falls back to all channels enabled.
+
+### Fixed
+
+- **`Warning`, `Error` and `Fatal` are no longer `[Conditional("ENABLE_LOGS")]`**, on `Log` and on `Log.LogBuilder`. The attribute strips the call at the *call site*, so a player built without the symbol compiled away every error report and left a crash reporter with nothing to send. The three levels are now gated at runtime by `MinimumLevel` alone, as `Trace`, `Debug` and `Info` still are at compile time. `LogMessage`, `LogToUnity` and `LogToUnityWithReference` lose the attribute for the same reason, so the path an error takes out of the package does not depend on how `Log.dll` itself was built.
+- Flag values are computed with a 64-bit shift. `1 << index` is an `int` expression: past bit 31 it wrapped to `int.MinValue` and then to zero, so a `long`- or `ulong`-backed flags enum could not have been generated correctly whatever backing type was selected in the window.
+
 ## [1.1.1] - 2026-09-10
 
 ### Added

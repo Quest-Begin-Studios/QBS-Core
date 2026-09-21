@@ -55,20 +55,17 @@ namespace QBS.Core
 			[Conditional("ENABLE_LOGS")]
 			public void InfoSnipe(string message) => Log.InfoSnipe(message, Tag, Color, Channel, Context);
 
-			[Conditional("ENABLE_LOGS")]
+			//Not [Conditional], for the reason the matching Log methods are not: these have to reach a
+			//crash reporter from a player built without ENABLE_LOGS.
 			public void Warning(string message) => Log.Warning(message, Tag, Color, Channel, Context);
 
-			[Conditional("ENABLE_LOGS")]
 			public void Error(string message) => Log.Error(message, Tag, Color, Channel, Context);
 
-			[Conditional("ENABLE_LOGS")]
 			public void Error(string message, Exception exception) => 
 				Log.Error(message, exception, Tag, Color, Channel, Context);
 
-			[Conditional("ENABLE_LOGS")]
 			public void Fatal(string message) => Log.Fatal(message, Tag, Color, Channel, Context);
 
-			[Conditional("ENABLE_LOGS")]
 			public void Fatal(string message, Exception exception) => 
 				Log.Fatal(message, exception, Tag, Color, Channel, Context);
 		}
