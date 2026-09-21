@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -60,11 +59,6 @@ namespace QBS.Core.Editor
         public List<FlagCombinationEntry> FlagCombinations { get; } = new();
         public List<CustomValueEntry> CustomValues { get; } = new();
 
-        // Written into every generated enum before EnumKeys and not editable in the window. Other
-        // assemblies compile against these names and their values, so the order here is load-bearing.
-        public List<string> ReservedKeys { get; } = new();
-        public List<FlagCombinationEntry> ReservedFlagCombinations { get; } = new();
-
         public void ConfigureEnumProperties(string enumName, string namespaceStr, EnumTypeOption enumType, BackingType backingType)
         {
             _enumName = enumName;
@@ -97,31 +91,10 @@ namespace QBS.Core.Editor
         }
 
         /// <summary>
-        ///     Sets the members that are injected into the generated enum whatever the window's own lists hold.
-        ///     They are emitted first and in this order, so appending to a reserved set leaves the values of
-        ///     the members already in it untouched; inserting or reordering renumbers every member after the
-        ///     change and silently reinterprets any mask already serialized against the old numbering.
-        /// </summary>
-        public void ConfigureReservedKeys(List<string> reservedKeys = null,
-            List<FlagCombinationEntry> reservedFlagCombinations = null)
-        {
-            if (reservedKeys != null)
-            {
-                ReservedKeys.Clear();
-                ReservedKeys.AddRange(reservedKeys);
-            }
-
-            if (reservedFlagCombinations != null)
-            {
-                ReservedFlagCombinations.Clear();
-                ReservedFlagCombinations.AddRange(reservedFlagCombinations);
-            }
-        }
-
-        /// <summary>
         ///     Every member name the next <see cref="GenerateEnum" /> emits, in the order it assigns their
-        ///     values: reserved keys, then configured keys, then reserved and configured flag combinations.
-        ///     Helper generation reads this, so a caller cannot hand the writers a list the enum disagrees with.
+        ///     values: the configured keys, then the flag combinations. Helper generation reads this, so a
+        ///     caller cannot hand the writers a list the enum itself disagrees with — a blank or repeated
+        ///     row in the window is dropped from both or from neither.
         ///     Meaningless for <see cref="EnumTypeOption.CustomValues" />, which names its members itself.
         /// </summary>
         public List<string> GetGeneratedKeyNames()
@@ -273,7 +246,6 @@ namespace QBS.Core.Editor
 
             if (_enumType == EnumTypeOption.Simple || _enumType == EnumTypeOption.Flags)
             {
-                DrawReservedKeysGUI();
                 _enumKeysList.DoLayoutList();
 
                 if (_enumType == EnumTypeOption.Flags)
@@ -287,40 +259,6 @@ namespace QBS.Core.Editor
                 _customValuesList.DoLayoutList();
             }
 
-            EditorGUILayout.Space();
-        }
-
-        private void DrawReservedKeysGUI()
-        {
-            if (ReservedKeys.Count == 0 && ReservedFlagCombinations.Count == 0)
-            {
-                return;
-            }
-
-            EditorGUILayout.HelpBox
-            (
-                "These members are injected into every generated enum, ahead of the keys below and in this "
-                + "order. They cannot be edited here: other assemblies are compiled against their names and "
-                + "values. Add to the set in code, never insert into or reorder it.",
-                MessageType.Info
-            );
-
-            EditorGUI.BeginDisabledGroup(true);
-            EditorGUILayout.BeginVertical("box");
-
-            var isFlags = _enumType == EnumTypeOption.Flags;
-            for (var i = 0; i < ReservedKeys.Count; i++)
-            {
-                EditorGUILayout.LabelField(isFlags ? $"Bit {i}" : $"{i}", ReservedKeys[i]);
-            }
-
-            foreach (var combination in ReservedFlagCombinations)
-            {
-                EditorGUILayout.LabelField(combination.Name, string.Join(" | ", combination.Flags));
-            }
-
-            EditorGUILayout.EndVertical();
-            EditorGUI.EndDisabledGroup();
             EditorGUILayout.Space();
         }
 
@@ -398,18 +336,7 @@ namespace QBS.Core.Editor
 
         private HashSet<string> ParseEnumKeys()
         {
-            // Reserved keys go in first and the set keeps insertion order, which is what pins a reserved
-            // member to the same flag value no matter what the window's own list holds.
             var keys = new HashSet<string>();
-
-            foreach (var reservedKey in ReservedKeys)
-            {
-                var trimmedReservedKey = reservedKey.Trim();
-                if (!string.IsNullOrEmpty(trimmedReservedKey))
-                {
-                    keys.Add(trimmedReservedKey);
-                }
-            }
 
             foreach (var key in EnumKeys)
             {
@@ -446,14 +373,14 @@ namespace QBS.Core.Editor
 
         private Dictionary<string, HashSet<string>> ParseFlagCombinations()
         {
-            if (FlagCombinations.Count == 0 && ReservedFlagCombinations.Count == 0)
+            if (FlagCombinations == null || FlagCombinations.Count == 0)
             {
                 return null;
             }
 
             var combinations = new Dictionary<string, HashSet<string>>();
 
-            foreach (var entry in ReservedFlagCombinations.Concat(FlagCombinations))
+            foreach (var entry in FlagCombinations)
             {
                 var combinationName = entry.Name.Trim();
                 if (string.IsNullOrEmpty(combinationName))
@@ -471,9 +398,7 @@ namespace QBS.Core.Editor
                     }
                 }
 
-                //A reserved combination is read first, so a configured one reusing its name is the
-                //duplicate and loses; the reserved definition is the one other assemblies compiled against.
-                if (flags.Count > 0 && !combinations.ContainsKey(combinationName))
+                if (flags.Count > 0)
                 {
                     combinations[combinationName] = flags;
                 }
@@ -485,25 +410,6 @@ namespace QBS.Core.Editor
         private List<string> GetAvailableFlags(int currentCombinationIndex)
         {
             var availableFlags = new List<string>();
-
-            // Add the reserved flags, which a configured combination is free to build on
-            foreach (var reservedKey in ReservedKeys)
-            {
-                var trimmedReservedKey = reservedKey.Trim();
-                if (!string.IsNullOrEmpty(trimmedReservedKey))
-                {
-                    availableFlags.Add(trimmedReservedKey);
-                }
-            }
-
-            foreach (var reservedCombination in ReservedFlagCombinations)
-            {
-                var reservedCombinationName = reservedCombination.Name.Trim();
-                if (!string.IsNullOrEmpty(reservedCombinationName))
-                {
-                    availableFlags.Add(reservedCombinationName);
-                }
-            }
 
             // Add all unique flags from EnumKeys
             foreach (var key in EnumKeys)

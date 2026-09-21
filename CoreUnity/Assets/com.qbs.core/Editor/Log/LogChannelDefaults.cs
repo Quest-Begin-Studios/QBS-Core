@@ -3,10 +3,9 @@
 namespace QBS.Core.Editor
 {
 	/// <summary>
-	///     The channels every generated LogChannel carries. Packages log to these by name against the
-	///     consumer's own generated Log.dll, so the set is append-only: a game may add channels after them
-	///     and must not remove, insert before or reorder one, which would renumber the rest and repoint
-	///     every mask already saved against the old numbering.
+	///     The channels a generated LogChannel starts with. Treat the list as append-only: packages log to
+	///     these by name against each consumer's own generated Log.dll, and removing, inserting before or
+	///     reordering one renumbers the rest, repointing every channel mask already saved.
 	/// </summary>
 	public static class LogChannelDefaults
 	{

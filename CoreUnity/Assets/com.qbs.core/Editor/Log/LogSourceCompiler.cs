@@ -53,7 +53,7 @@ namespace QBS.Core.Editor
                 EnumGeneratorComponent.EnumTypeOption.Flags,
                 EnumGeneratorComponent.BackingType.Long
             );
-            _enumGenerator.ConfigureReservedKeys
+            _enumGenerator.ConfigureEnumKeys
             (
                 LogChannelDefaults.BaseKeys,
                 LogChannelDefaults.FlagCombinations

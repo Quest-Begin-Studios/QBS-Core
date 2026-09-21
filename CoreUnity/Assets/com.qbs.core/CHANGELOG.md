@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `EnumGeneratorComponent.ConfigureReservedKeys`, members injected into every generated enum ahead of the window's own keys and not editable there. `GetGeneratedKeyNames()` returns the emitted members in value order, and both the windowed and headless compilers build their `ToStringFast` helpers from it, so the helper can no longer disagree with the enum it is generated beside.
-- `LogChannelDefaults` gains the studio channels `Auth`, `Bridge`, `Sfs`, `Http` and `Build`, appended after the existing ten. The set is now documented as append-only and is injected as reserved keys: a consumer's Log Configuration window can add channels after them but cannot remove, insert before or reorder one. Packages log to these names against each consumer's own generated `Log.dll`, and renumbering them would repoint every channel mask already saved.
+- `EnumGeneratorComponent.GetGeneratedKeyNames()`, the member names the next generation emits in the order it assigns their values. Both the windowed and headless compilers build their `ToStringFast` helper from it instead of each flattening its own copy of the key lists, so the helper can no longer disagree with the enum generated beside it: a blank or repeated row in the window is dropped from both or from neither.
+- `LogChannelDefaults` gains the studio channels `Auth`, `Bridge`, `Sfs`, `Http` and `Build`, appended after the existing ten. The list is documented as append-only: packages log to these names against each consumer's own generated `Log.dll`, so removing, inserting before or reordering one renumbers the rest and repoints every channel mask already saved.
 - `LogEditorUtility.ReadActiveChannels` / `WriteActiveChannels`, which carry the editor's channel mask through `EditorPrefs` as a string. `EditorPrefs` has no `long`, and the mask no longer fits an `int`.
 
 ### Changed

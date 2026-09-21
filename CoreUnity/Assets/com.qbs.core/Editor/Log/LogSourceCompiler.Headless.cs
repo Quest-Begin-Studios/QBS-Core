@@ -29,7 +29,7 @@ namespace QBS.Core.Editor
                 EnumGeneratorComponent.EnumTypeOption.Flags,
                 EnumGeneratorComponent.BackingType.Long
             );
-            enumGenerator.ConfigureReservedKeys
+            enumGenerator.ConfigureEnumKeys
             (
                 LogChannelDefaults.BaseKeys,
                 LogChannelDefaults.FlagCombinations
