@@ -13,6 +13,7 @@ namespace QBS.Core.Editor
     {
         private const string NamespaceStr = "QBS.Core";
         private const string LogChannelsName = "LogChannel";
+        private const string LogChannelTypeName = NamespaceStr + "." + LogChannelsName;
         private const string AssemblyReferencesJson = "AssemblyReferences.json";
         private const string RawSourceFolderPath = @"Assets\com.qbs.core\RawSource~\LogSource";
 
@@ -22,6 +23,7 @@ namespace QBS.Core.Editor
 
         private List<SourceFile> _sourceFiles;
         private string _capturedEnumCode = "";
+        private string _channelSourceSummary = "";
         private List<string> _runtimeAssemblyReferences;
         private List<string> _editorAssemblyReferences;
         private readonly List<string> _scriptingSymbols = new() { "ENABLE_LOGS" };
@@ -53,11 +55,23 @@ namespace QBS.Core.Editor
                 EnumGeneratorComponent.EnumTypeOption.Flags,
                 EnumGeneratorComponent.BackingType.Long
             );
-            _enumGenerator.ConfigureEnumKeys
-            (
-                LogChannelDefaults.BaseKeys,
-                LogChannelDefaults.FlagCombinations
-            );
+            //Opening on the defaults would drop a game's own channels the next time anyone pressed
+            //Generate, so the project's compiled enum wins whenever there is one to read.
+            if (TryReadCompiledChannels(out var baseKeys, out var flagCombinations))
+            {
+                _channelSourceSummary =
+                    $"Populated from the {LogChannelsName} compiled into this project: {baseKeys.Count} channels, "
+                    + $"{flagCombinations.Count} combinations. Generating rewrites exactly what is listed below.";
+            }
+            else
+            {
+                baseKeys = LogChannelDefaults.BaseKeys;
+                flagCombinations = LogChannelDefaults.FlagCombinations;
+                _channelSourceSummary =
+                    $"No {LogChannelsName} is compiled into this project yet, so the studio defaults are listed.";
+            }
+
+            _enumGenerator.ConfigureEnumKeys(baseKeys, flagCombinations);
         }
 
         private void OnDisable()
@@ -147,7 +161,7 @@ namespace QBS.Core.Editor
             EditorGUILayout.BeginVertical("box");
             GUILayout.Label("Enum Generation", EditorStyles.boldLabel);
             EditorGUILayout.Space();
-            EditorGUILayout.HelpBox("Create the LogChannel enum here.", MessageType.Info);
+            EditorGUILayout.HelpBox($"Create the {LogChannelsName} enum here.\n\n{_channelSourceSummary}", MessageType.Info);
             EditorGUILayout.Space();
 
             _enumScrollPosition = EditorGUILayout.BeginScrollView(_enumScrollPosition, GUILayout.Height(500));
@@ -223,6 +237,137 @@ namespace QBS.Core.Editor
 
             _sourceFiles.Add(new SourceFile(_capturedEnumCode, "LogChannels.cs"));
             _sourceFiles.Add(new SourceFile(toStringNoBoxSource, "LogChannelsStringUtils.cs"));
+        }
+
+        /// <summary>
+        ///     Reads the <see cref="LogChannelsName" /> already compiled into the project, so a regeneration
+        ///     reproduces the channels the project has instead of replacing them with the studio defaults.
+        ///     Members come back in value order, which for a flags enum is bit order, so the numbering every
+        ///     saved mask and every package assembly depends on survives the round trip.
+        ///     Returns <c>false</c> when no such enum is loaded, which is the first-generation case.
+        /// </summary>
+        private static bool TryReadCompiledChannels(out List<string> baseKeys,
+            out List<EnumGeneratorComponent.FlagCombinationEntry> flagCombinations)
+        {
+            baseKeys = null;
+            flagCombinations = null;
+
+            var channelType = FindCompiledChannelType();
+            if (channelType == null)
+            {
+                return false;
+            }
+
+            var names = Enum.GetNames(channelType);
+            var values = Enum.GetValues(channelType);
+
+            var singles = new List<(string Name, long Value)>();
+            var composites = new List<(string Name, long Value)>();
+            long union = 0;
+
+            for (var i = 0; i < names.Length; i++)
+            {
+                var value = Convert.ToInt64(values.GetValue(i));
+                if (HasSingleBit(value))
+                {
+                    singles.Add((names[i], value));
+                    union |= value;
+                }
+            }
+
+            for (var i = 0; i < names.Length; i++)
+            {
+                var value = Convert.ToInt64(values.GetValue(i));
+
+                //None is 0, and All carries every bit including ones no channel owns. Both are written by
+                //the generator itself, so neither belongs in the lists the window edits.
+                if (value == 0 || HasSingleBit(value) || (value & ~union) != 0)
+                {
+                    continue;
+                }
+
+                composites.Add((names[i], value));
+            }
+
+            singles.Sort((left, right) => left.Value.CompareTo(right.Value));
+            composites.Sort((left, right) => left.Value.CompareTo(right.Value));
+
+            baseKeys = new List<string>(singles.Count);
+            foreach (var single in singles)
+            {
+                baseKeys.Add(single.Name);
+            }
+
+            flagCombinations = new List<EnumGeneratorComponent.FlagCombinationEntry>(composites.Count);
+            foreach (var composite in composites)
+            {
+                flagCombinations.Add
+                (
+                    new EnumGeneratorComponent.FlagCombinationEntry
+                    {
+                        Name = composite.Name,
+                        Flags = DecomposeChannel(composite.Value, singles, composites),
+                    }
+                );
+            }
+
+            return baseKeys.Count > 0;
+        }
+
+        private static Type FindCompiledChannelType()
+        {
+            foreach (var assembly in AssemblyCompat.GetLoadedAssemblies())
+            {
+                //GetType over GetTypes: the latter throws on any assembly with an unresolved reference,
+                //and this runs across every assembly in the domain.
+                var type = assembly.GetType(LogChannelTypeName, throwOnError: false);
+                if (type is { IsEnum: true })
+                {
+                    return type;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        ///     Names the members a composite value is made of, preferring a smaller composite over spelling
+        ///     out its bits so <c>AI | Physics | Core</c> comes back as it was written rather than flattened.
+        ///     Only a strictly smaller composite is used, so a definition can never reference itself.
+        /// </summary>
+        private static List<string> DecomposeChannel(long value, List<(string Name, long Value)> singles,
+            List<(string Name, long Value)> composites)
+        {
+            var flags = new List<string>();
+            var remaining = value;
+
+            for (var i = composites.Count - 1; i >= 0; i--)
+            {
+                var candidate = composites[i];
+                if (candidate.Value >= value || (remaining & candidate.Value) != candidate.Value)
+                {
+                    continue;
+                }
+
+                flags.Add(candidate.Name);
+                remaining &= ~candidate.Value;
+            }
+
+            foreach (var single in singles)
+            {
+                if ((remaining & single.Value) != 0)
+                {
+                    flags.Add(single.Name);
+                    remaining &= ~single.Value;
+                }
+            }
+
+            return flags;
+        }
+
+        private static bool HasSingleBit(long value)
+        {
+            return value != 0 && (value & (value - 1)) == 0;
         }
 
         private static bool ReadSources(List<SourceFile> sourceFiles, List<string> runtimeAssemblyReferences, List<string> editorAssemblyReferences)

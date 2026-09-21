@@ -79,8 +79,13 @@ namespace QBS.Core.Editor
 
             if (flagCombinations != null)
             {
+                //Copied, not shared: the entries are mutable and the window edits them in place, which
+                //would otherwise write straight into the caller's list — LogChannelDefaults, as a rule.
                 FlagCombinations.Clear();
-                FlagCombinations.AddRange(flagCombinations);
+                foreach (var entry in flagCombinations)
+                {
+                    FlagCombinations.Add(new FlagCombinationEntry { Name = entry.Name, Flags = new List<string>(entry.Flags) });
+                }
             }
 
             if (customValueEntries != null)

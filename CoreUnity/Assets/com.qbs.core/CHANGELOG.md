@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `EnumGeneratorComponent.GetGeneratedKeyNames()`, the member names the next generation emits in the order it assigns their values. Both the windowed and headless compilers build their `ToStringFast` helper from it instead of each flattening its own copy of the key lists, so the helper can no longer disagree with the enum generated beside it: a blank or repeated row in the window is dropped from both or from neither.
-- `LogChannelDefaults` gains the studio channels `Auth`, `Bridge`, `Sfs`, `Http` and `Build`, appended after the existing ten. The list is documented as append-only: packages log to these names against each consumer's own generated `Log.dll`, so removing, inserting before or reordering one renumbers the rest and repoints every channel mask already saved.
+- **The Log Source Compiler populates itself from the `LogChannel` already compiled into the project**, falling back to `LogChannelDefaults` only when there is none. Both the window and `GenerateLogDLLsHeadless` read it, so neither replaces a project's channels with the defaults — which until now deleted every game-added channel from under its own call sites on the next regeneration. Single-bit members come back as the key list in bit order and multi-bit members as flag combinations, each expressed with the smaller combinations it contains where there are any, so values survive the round trip unchanged.
+- `EnumGeneratorComponent.GetGeneratedKeyNames()`, the member names the next generation emits in the order it assigns their values. Both compilers build their `ToStringFast` helper from it instead of each flattening its own copy of the key lists, so the helper can no longer disagree with the enum generated beside it: a blank or repeated row in the window is dropped from both or from neither.
 - `LogEditorUtility.ReadActiveChannels` / `WriteActiveChannels`, which carry the editor's channel mask through `EditorPrefs` as a string. `EditorPrefs` has no `long`, and the mask no longer fits an `int`.
 
 ### Changed
@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The editor's saved channel mask moved to the `QBS_Log_ActiveChannelMask` key. `EditorPrefs` entries are typed, so the 32-bit value under the old key is ignored and the first read falls back to all channels enabled.
 
 ### Fixed
+
+- `EnumGeneratorComponent.ConfigureEnumKeys` copies the flag-combination entries it is handed instead of storing the caller's own objects. The entries are mutable and the window edits them in place, so editing a combination wrote straight into the list that supplied it — `LogChannelDefaults` being the one that always does.
 
 - **`Warning`, `Error` and `Fatal` are no longer `[Conditional("ENABLE_LOGS")]`**, on `Log` and on `Log.LogBuilder`. The attribute strips the call at the *call site*, so a player built without the symbol compiled away every error report and left a crash reporter with nothing to send. The three levels are now gated at runtime by `MinimumLevel` alone, as `Trace`, `Debug` and `Info` still are at compile time. `LogMessage`, `LogToUnity` and `LogToUnityWithReference` lose the attribute for the same reason, so the path an error takes out of the package does not depend on how `Log.dll` itself was built.
 - Flag values are computed with a 64-bit shift. `1 << index` is an `int` expression: past bit 31 it wrapped to `int.MinValue` and then to zero, so a `long`- or `ulong`-backed flags enum could not have been generated correctly whatever backing type was selected in the window.

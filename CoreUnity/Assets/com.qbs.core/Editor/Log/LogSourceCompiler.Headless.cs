@@ -29,11 +29,20 @@ namespace QBS.Core.Editor
                 EnumGeneratorComponent.EnumTypeOption.Flags,
                 EnumGeneratorComponent.BackingType.Long
             );
-            enumGenerator.ConfigureEnumKeys
-            (
-                LogChannelDefaults.BaseKeys,
-                LogChannelDefaults.FlagCombinations
-            );
+            //Same rule as the window: an unattended rebuild must not replace a project's channels with
+            //the studio defaults, which would delete every game channel from under its own call sites.
+            if (TryReadCompiledChannels(out var baseKeys, out var flagCombinations))
+            {
+                Debug.Log($"GenerateLogDLLsHeadless: reproducing the {baseKeys.Count} channels already compiled into this project.");
+            }
+            else
+            {
+                baseKeys = LogChannelDefaults.BaseKeys;
+                flagCombinations = LogChannelDefaults.FlagCombinations;
+                Debug.Log("GenerateLogDLLsHeadless: no LogChannel compiled yet, generating the studio defaults.");
+            }
+
+            enumGenerator.ConfigureEnumKeys(baseKeys, flagCombinations);
 
             if (!enumGenerator.GenerateEnum())
             {
