@@ -139,6 +139,7 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogMessage(string message, string tag, Color color,
 			LogLevel level, LogChannel channel, Object context)
 		{
@@ -268,6 +269,7 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnity(LogLevel level, string toString)
 		{
 			switch (level)
@@ -296,6 +298,7 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnityWithReference(LogLevel level, string toString, Object context)
 		{
 			switch (level)
