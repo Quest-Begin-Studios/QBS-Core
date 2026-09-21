@@ -1,6 +1,9 @@
 using System;
+using System.Diagnostics;
 using System.Text;
 using UnityEngine;
+//Aliased because System.Diagnostics, needed for [Conditional], also has a Debug.
+using Debug = UnityEngine.Debug;
 using Object = UnityEngine.Object;
 
 namespace QBS.Core
@@ -82,6 +85,7 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnity(LogLevel level, string message)
 		{
 			switch (level)
@@ -110,6 +114,7 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void LogToUnityWithReference(LogLevel level, string message, Object context)
 		{
 			switch (level)

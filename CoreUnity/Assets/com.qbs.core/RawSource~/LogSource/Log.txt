@@ -175,6 +175,7 @@ namespace QBS.Core
 		}
 
 		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
 		private static void Dispatch(in LogEvent logEvent)
 		{
 			if (logEvent.Level < MinimumLevel)
