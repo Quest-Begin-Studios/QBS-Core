@@ -66,12 +66,13 @@ namespace QBS.Core
 				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 				=> Log.InfoSnipe(message, Tag, Color, Channel, Context, member, file, line);
 
-			//Not [Conditional], for the reason the matching Log methods are not: these have to reach a
-			//crash reporter from a player built without ENABLE_LOGS.
+			[Conditional("ENABLE_LOGS")]
 			public void Warning(string message,
 				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 				=> Log.Warning(message, Tag, Color, Channel, Context, member, file, line);
 
+			//Error and Fatal alone are not [Conditional], for the reason the matching Log methods are not:
+			//these have to reach a crash reporter from a player built without ENABLE_LOGS.
 			public void Error(string message,
 				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 				=> Log.Error(message, Tag, Color, Channel, Context, member, file, line);
