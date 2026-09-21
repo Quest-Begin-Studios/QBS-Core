@@ -27,13 +27,22 @@ namespace QBS.Core.Editor
                 LogChannelsName,
                 NamespaceStr,
                 EnumGeneratorComponent.EnumTypeOption.Flags,
-                EnumGeneratorComponent.BackingType.Int
+                EnumGeneratorComponent.BackingType.Long
             );
-            enumGenerator.ConfigureEnumKeys
-            (
-                LogChannelDefaults.BaseKeys,
-                LogChannelDefaults.FlagCombinations
-            );
+            //Same rule as the window: an unattended rebuild must not replace a project's channels with
+            //the studio defaults, which would delete every game channel from under its own call sites.
+            if (TryReadCompiledChannels(out var baseKeys, out var flagCombinations))
+            {
+                Debug.Log($"GenerateLogDLLsHeadless: reproducing the {baseKeys.Count} channels already compiled into this project.");
+            }
+            else
+            {
+                baseKeys = LogChannelDefaults.BaseKeys;
+                flagCombinations = LogChannelDefaults.FlagCombinations;
+                Debug.Log("GenerateLogDLLsHeadless: no LogChannel compiled yet, generating the studio defaults.");
+            }
+
+            enumGenerator.ConfigureEnumKeys(baseKeys, flagCombinations);
 
             if (!enumGenerator.GenerateEnum())
             {
@@ -43,18 +52,7 @@ namespace QBS.Core.Editor
 
             var capturedEnumCode = enumGenerator.GeneratedCode;
 
-            var enumKeysCount = enumGenerator.EnumKeys.Count;
-            var allKeysCount = enumKeysCount + enumGenerator.FlagCombinations.Count;
-            var enumKeys = new string[allKeysCount];
-            for (var i = 0; i < enumKeysCount; i++)
-            {
-                enumKeys[i] = enumGenerator.EnumKeys[i];
-            }
-
-            for (var i = 0; i < enumGenerator.FlagCombinations.Count; i++)
-            {
-                enumKeys[enumKeysCount + i] = enumGenerator.FlagCombinations[i].Name;
-            }
+            var enumKeys = enumGenerator.GetGeneratedKeyNames().ToArray();
 
             var toStringNoBoxSource = EnumUtilsSourceWriter.CreateUtilsFromEnumDetails
             (

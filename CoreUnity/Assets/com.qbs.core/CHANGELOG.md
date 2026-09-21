@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-21
+
+### Added
+
+- **Sinks.** `ILogSink` (`void Write(in LogEvent)`), `Log.AddSink` and `Log.RemoveSink`. Every event that passes `MinimumLevel` and `EnabledChannels` goes to each registered sink, on the calling thread. This is what lets a game feed a crash reporter, an on-screen overlay or a file without the package knowing they exist.
+- **`LogEvent`**, the structured event a sink receives: level, channel, tag, message, exception, colour, context and the call site. A crash reporter can now capture the `Exception` object itself, with the stack the runtime recorded, instead of the text somebody appended `StackTrace` to.
+- **Call-site capture.** Every `Log` method and every `LogBuilder` method takes `[CallerMemberName]`, `[CallerFilePath]` and `[CallerLineNumber]` after its existing optional parameters, so `LogEvent` carries the member, file and line. The compiler fills them in, so this costs nothing at runtime and no existing call site changes.
+- **`Log.Exception(exception, message = null, ...)`**, an entry point at `Error` level for a caught exception; the message defaults to the exception's own. `LogBuilder` has the matching method.
+- **`Log.DefaultSink`**, the `UnitySink` registered at startup, exposed so a game that wants its output somewhere else can remove it.
+
+### Changed
+
+- Console formatting moved out of `Log` and into `UnitySink`, which produces the same string as before: `[Level] [Channel] [Tag]`, the message, colour-wrapped when a colour was given, with any exception appended. The `[ThreadStatic]` builder moved with it. Existing console output is unchanged.
+- `Log.Error(message, exception)` and `Log.Fatal(message, exception)` no longer append `"Passed Exception is null"` when handed a null exception. The event carries a null `Exception` and sinks decide; the Unity sink simply omits the section.
+
+## [1.2.0] - 2026-09-21
+
+### Added
+
+- **The Log Source Compiler populates itself from the `LogChannel` already compiled into the project**, falling back to `LogChannelDefaults` only when there is none. Both the window and `GenerateLogDLLsHeadless` read it, so neither replaces a project's channels with the defaults — which until now deleted every game-added channel from under its own call sites on the next regeneration. Single-bit members come back as the key list in bit order and multi-bit members as flag combinations, each expressed with the smaller combinations it contains where there are any, so values survive the round trip unchanged.
+- `EnumGeneratorComponent.GetGeneratedKeyNames()`, the member names the next generation emits in the order it assigns their values. Both compilers build their `ToStringFast` helper from it instead of each flattening its own copy of the key lists, so the helper can no longer disagree with the enum generated beside it: a blank or repeated row in the window is dropped from both or from neither.
+- `LogEditorUtility.ReadActiveChannels` / `WriteActiveChannels`, which carry the editor's channel mask through `EditorPrefs` as a string. `EditorPrefs` has no `long`, and the mask no longer fits an `int`.
+
+### Changed
+
+- **`LogChannel` is generated as a `long`-backed flags enum** rather than `int`, raising the ceiling from 31 channels to 63. Consumers must regenerate `Assets/Plugins/Log/` (`Tools > QBS > Logs > Log Source Compiler`, or `LogSourceCompiler.GenerateLogDLLsHeadless` in CI) after upgrading; a stale `Log.dll` keeps its 32-bit enum and will not link against code compiled for the new one.
+- `RuntimeLogSettings.enabledChannels` is serialized as `long`. Unity serializes an enum field as 32 bits, which would silently drop every channel past the 32nd. Existing assets carry `-1` and keep deserializing to every channel enabled.
+- The editor's saved channel mask moved to the `QBS_Log_ActiveChannelMask` key. `EditorPrefs` entries are typed, so the 32-bit value under the old key is ignored and the first read falls back to all channels enabled.
+
+### Fixed
+
+- `EnumGeneratorComponent.ConfigureEnumKeys` copies the flag-combination entries it is handed instead of storing the caller's own objects. The entries are mutable and the window edits them in place, so editing a combination wrote straight into the list that supplied it — `LogChannelDefaults` being the one that always does.
+
+- **`Error` and `Fatal` are no longer `[Conditional("ENABLE_LOGS")]`**, on `Log` and on `Log.LogBuilder`. The attribute strips the call at the *call site*, so a player built without the symbol compiled away every error report and left a crash reporter with nothing to send. Those two levels are now gated at runtime by `MinimumLevel` alone; `Trace`, `Debug`, `Info` and `Warning` keep the attribute and still leave a release build entirely. The private formatting helpers keep the attribute: the DLL is always compiled with the symbol, so it changes nothing for them.
+- Flag values are computed with a 64-bit shift. `1 << index` is an `int` expression: past bit 31 it wrapped to `int.MinValue` and then to zero, so a `long`- or `ulong`-backed flags enum could not have been generated correctly whatever backing type was selected in the window.
+
 ## [1.1.1] - 2026-09-10
 
 ### Added

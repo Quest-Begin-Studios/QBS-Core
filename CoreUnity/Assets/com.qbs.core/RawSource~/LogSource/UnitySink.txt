@@ -1,0 +1,155 @@
+using System;
+using System.Diagnostics;
+using System.Text;
+using UnityEngine;
+//Aliased because System.Diagnostics, needed for [Conditional], also has a Debug.
+using Debug = UnityEngine.Debug;
+using Object = UnityEngine.Object;
+
+namespace QBS.Core
+{
+	/// <summary>
+	///     Writes events to the Unity console, and is registered by default so logging works with no setup.
+	///     The format is the one <see cref="Log" /> produced before sinks existed: <c>[Level] [Channel] [Tag]</c>
+	///     then the message, colour-wrapped when a colour was given, with any exception appended after it.
+	/// </summary>
+	public class UnitySink : ILogSink
+	{
+		private const string BracketsFormat = "[{0}] ";
+		private const string ColorStartTag = "<color=#";
+		private const string ColorEndTag = "</color>";
+
+		//Kept per thread, as it was on Log: WebGL is single threaded, standalone is not.
+		[ThreadStatic]
+		private static StringBuilder _sb;
+
+		private static StringBuilder Builder
+		{
+			get
+			{
+				_sb ??= new StringBuilder(capacity: 512);
+				return _sb;
+			}
+		}
+
+		[HideInCallstack]
+		public void Write(in LogEvent logEvent)
+		{
+			//Everything below the call, the formatting included, is behind [Conditional]: with ENABLE_LOGS
+			//off there is no console write to make, so the string that would feed it should not be built
+			//either. Write itself cannot carry the attribute; C# refuses it on an interface implementation.
+			WriteToConsole(in logEvent);
+		}
+
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
+		private static void WriteToConsole(in LogEvent logEvent)
+		{
+			var builder = Builder;
+			builder.Clear();
+			builder.AppendFormat(BracketsFormat, logEvent.Level.ToStringFast());
+
+			if (logEvent.Channel != default)
+			{
+				builder.AppendFormat(BracketsFormat, logEvent.Channel.ToStringFast());
+			}
+
+			if (logEvent.Tag != null)
+			{
+				builder.AppendFormat(BracketsFormat, logEvent.Tag);
+			}
+
+			if (logEvent.Color != default)
+			{
+				builder.Append(ColorStartTag);
+				builder.Append(((byte) (logEvent.Color.r * 255)).ToString("X2"));
+				builder.Append(((byte) (logEvent.Color.g * 255)).ToString("X2"));
+				builder.Append(((byte) (logEvent.Color.b * 255)).ToString("X2"));
+				builder.Append(">");
+				builder.Append(logEvent.Message);
+				builder.Append(ColorEndTag);
+			}
+			else
+			{
+				builder.Append(logEvent.Message);
+			}
+
+			if (logEvent.Exception != null)
+			{
+				builder.Append("\n");
+				builder.Append(logEvent.Exception.GetType().Name);
+				builder.Append(": ");
+				builder.Append(logEvent.Exception.Message);
+				builder.Append("\n");
+				builder.Append(logEvent.Exception.StackTrace);
+			}
+
+			if (logEvent.Context != null)
+			{
+				LogToUnityWithReference(logEvent.Level, builder.ToString(), logEvent.Context);
+			}
+			else
+			{
+				LogToUnity(logEvent.Level, builder.ToString());
+			}
+		}
+
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
+		private static void LogToUnity(LogLevel level, string message)
+		{
+			switch (level)
+			{
+				case LogLevel.Trace:
+				case LogLevel.Debug:
+				case LogLevel.Info:
+				{
+					Debug.Log(message);
+					break;
+				}
+				case LogLevel.Warning:
+				{
+					Debug.LogWarning(message);
+					break;
+				}
+				case LogLevel.Error:
+				case LogLevel.Fatal:
+				{
+					Debug.LogError(message);
+					break;
+				}
+				default:
+					throw new ArgumentOutOfRangeException(nameof(level), level, null);
+			}
+		}
+
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
+		private static void LogToUnityWithReference(LogLevel level, string message, Object context)
+		{
+			switch (level)
+			{
+				case LogLevel.Trace:
+				case LogLevel.Debug:
+				case LogLevel.Info:
+				{
+					Debug.Log(message, context);
+					break;
+				}
+				case LogLevel.Warning:
+				{
+					Debug.LogWarning(message, context);
+					break;
+				}
+				case LogLevel.Error:
+				case LogLevel.Fatal:
+				{
+					Debug.LogError(message, context);
+					break;
+				}
+				default:
+					throw new ArgumentOutOfRangeException(nameof(level), level, null);
+			}
+		}
+	}
+}

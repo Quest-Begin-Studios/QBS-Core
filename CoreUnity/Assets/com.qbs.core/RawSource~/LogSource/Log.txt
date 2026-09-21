@@ -1,7 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Text;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -19,24 +19,38 @@ namespace QBS.Core
 
 	public static partial class Log
 	{
-		[ThreadStatic]
-		private static StringBuilder _sb;
-		private static StringBuilder Builder
-		{
-			get
-			{
-				_sb ??= new StringBuilder(capacity: 512);
-				return _sb;
-			}
-		}
-
-		private const string BracketsFormat = "[{0}] ";
 		private const string AssertionFailedTag = "ASSERTION FAILED";
-		private const string ColorStartTag = "<color=#";
-		private const string ColorEndTag = "</color>";
+
+		/// <summary>
+		///     The console sink every game starts with, exposed so a game that wants its output somewhere
+		///     else can <see cref="RemoveSink" /> it. Logging therefore needs no setup, and needs no
+		///     guesswork to undo.
+		/// </summary>
+		public static readonly UnitySink DefaultSink = new UnitySink();
+
+		private static readonly List<ILogSink> _sinks = new() { DefaultSink };
 
 		public static LogLevel MinimumLevel { get; set; } = LogLevel.Trace;
 		public static LogChannel EnabledChannels { get; set; } = LogChannel.All;
+
+		/// <summary>
+		///     Adds a destination for every event that passes <see cref="MinimumLevel" /> and
+		///     <see cref="EnabledChannels" />. Adding the same instance twice does nothing.
+		/// </summary>
+		public static void AddSink(ILogSink sink)
+		{
+			if (sink == null || _sinks.Contains(sink))
+			{
+				return;
+			}
+
+			_sinks.Add(sink);
+		}
+
+		public static void RemoveSink(ILogSink sink)
+		{
+			_sinks.Remove(sink);
+		}
 
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -63,293 +77,149 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Trace(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage(message, tag, color, LogLevel.Trace, channel, context);
+			Dispatch(new LogEvent(LogLevel.Trace, message, tag, color, channel, context, null, member, file, line));
 		}
 
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Debug(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage(message, tag, color, LogLevel.Debug, channel, context);
+			Dispatch(new LogEvent(LogLevel.Debug, message, tag, color, channel, context, null, member, file, line));
 		}
 
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Info(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage(message, tag, color, LogLevel.Info, channel, context);
+			Dispatch(new LogEvent(LogLevel.Info, message, tag, color, channel, context, null, member, file, line));
 		}
 
 		// String allocation
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		public static void InfoSnipe(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage($"( -_•)▄︻デ══━一 {message}", tag, color, LogLevel.Info, channel, context);
+			Dispatch(new LogEvent(LogLevel.Info, $"( -_•)▄︻デ══━一 {message}", tag, color, channel, context, null, member, file, line));
 		}
 
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Warning(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage(message, tag, color, LogLevel.Warning, channel, context);
+			Dispatch(new LogEvent(LogLevel.Warning, message, tag, color, channel, context, null, member, file, line));
 		}
 
-		[Conditional("ENABLE_LOGS")]
+		//Error and Fatal alone are not [Conditional]: the attribute strips the call at the call site, so a
+		//player built without ENABLE_LOGS would report nothing to a crash reporter at all.
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage(message, tag, color, LogLevel.Error, channel, context);
+			Dispatch(new LogEvent(LogLevel.Error, message, tag, color, channel, context, null, member, file, line));
 		}
 
-		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void Error(string message, Exception exception, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+		public static void Error(string message, System.Exception exception, string tag = null, Color color = default,
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessageWithException(message, exception, tag, color, LogLevel.Error, channel, context);
+			Dispatch(new LogEvent(LogLevel.Error, message, tag, color, channel, context, exception, member, file, line));
 		}
 
-		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessage(message, tag, color, LogLevel.Fatal, channel, context);
+			Dispatch(new LogEvent(LogLevel.Fatal, message, tag, color, channel, context, null, member, file, line));
 		}
 
 		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void Fatal(string message, Exception exception, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null)
+		public static void Fatal(string message, System.Exception exception, string tag = null, Color color = default,
+			LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
-			LogMessageWithException(message, exception, tag, color, LogLevel.Fatal, channel, context);
+			Dispatch(new LogEvent(LogLevel.Fatal, message, tag, color, channel, context, exception, member, file, line));
+		}
+
+		/// <summary>
+		///     Reports a caught exception at <see cref="LogLevel.Error" />. The exception object rides along
+		///     whole, so a crash reporter can capture it with its own stack rather than a copy of the text.
+		/// </summary>
+		[HideInCallstack]
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Exception(System.Exception exception, string message = null, string tag = null,
+			Color color = default, LogChannel channel = default, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+		{
+			Dispatch(new LogEvent(LogLevel.Error, message ?? exception?.Message, tag, color, channel, context, exception, member, file, line));
 		}
 
 		[HideInCallstack]
 		[Conditional("ENABLE_LOGS")]
-		private static void LogMessage(string message, string tag, Color color,
-			LogLevel level, LogChannel channel, Object context)
+		private static void Dispatch(in LogEvent logEvent)
 		{
-			if (level < MinimumLevel)
+			if (logEvent.Level < MinimumLevel)
 			{
 				return;
 			}
 
-			if (!IsChannelEnabled(channel) && channel != default)
+			if (!IsChannelEnabled(logEvent.Channel) && logEvent.Channel != default)
 			{
 				return;
 			}
 
-			// Append level first.
-			var levelStr = level.ToStringFast();
-			Builder.Clear();
-			Builder.AppendFormat(BracketsFormat, levelStr);
-
-			// Append channel if specified.
-			if (channel != default)
+			//Indexed rather than foreach: a sink is free to add or remove one while handling an event,
+			//and the enumerator would throw where this simply picks the change up on the next call.
+			for (var i = 0; i < _sinks.Count; i++)
 			{
-				var channelStr = channel.ToStringFast();
-				Builder.AppendFormat(BracketsFormat, channelStr);
-			}
-
-			// Append tag if specified.
-			if (tag != null)
-			{
-				Builder.AppendFormat(BracketsFormat, tag);
-			}
-
-			if (color != default)
-			{
-				Builder.Append(ColorStartTag);
-				Builder.Append(((byte)(color.r * 255)).ToString("X2"));
-				Builder.Append(((byte)(color.g * 255)).ToString("X2"));
-				Builder.Append(((byte)(color.b * 255)).ToString("X2"));
-				Builder.Append(">");
-				Builder.Append(message);
-				Builder.Append(ColorEndTag);
-			}
-			else
-			{
-				Builder.Append(message);
-			}
-
-			if (context != null)
-			{
-				LogToUnityWithReference(level, Builder.ToString(), context);
-			}
-			else
-			{
-				LogToUnity(level, Builder.ToString());
-			}
-		}
-
-		[HideInCallstack]
-		private static void LogMessageWithException(string message, Exception exception, string tag, Color color,
-			LogLevel level, LogChannel channel, Object context)
-		{
-			if (level < MinimumLevel)
-			{
-				return;
-			}
-
-			if (!IsChannelEnabled(channel) && channel != default)
-			{
-				return;
-			}
-
-			// Append level first.
-			var levelStr = level.ToStringFast();
-			Builder.Clear();
-			Builder.AppendFormat(BracketsFormat, levelStr);
-
-			// Append channel if specified.
-			if (channel != default)
-			{
-				var channelStr = channel.ToStringFast();
-				Builder.AppendFormat(BracketsFormat, channelStr);
-			}
-
-			// Append tag if specified.
-			if (tag != null)
-			{
-				Builder.AppendFormat(BracketsFormat, tag);
-			}
-
-			if (color != default)
-			{
-				Builder.Append(ColorStartTag);
-				Builder.Append(((byte)(color.r * 255)).ToString("X2"));
-				Builder.Append(((byte)(color.g * 255)).ToString("X2"));
-				Builder.Append(((byte)(color.b * 255)).ToString("X2"));
-				Builder.Append(">");
-				Builder.Append(message);
-				Builder.Append(ColorEndTag);
-			}
-			else
-			{
-				Builder.Append(message);
-			}
-
-			if (exception == null)
-			{
-				Builder.Append("\n Passed Exception is null");
-			}
-			else
-			{
-				// Append exception details
-				Builder.Append("\n");
-				Builder.Append(exception.GetType().Name);
-				Builder.Append(": ");
-				Builder.Append(exception.Message);
-				Builder.Append("\n");
-				Builder.Append(exception.StackTrace);
-			}
-
-			if (context != null)
-			{
-				LogToUnityWithReference(level, Builder.ToString(), context);
-			}
-			else
-			{
-				LogToUnity(level, Builder.ToString());
-			}
-		}
-
-		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
-		private static void LogToUnity(LogLevel level, string toString)
-		{
-			switch (level)
-			{
-				case LogLevel.Trace:
-				case LogLevel.Debug:
-				case LogLevel.Info:
-				{
-					UnityEngine.Debug.Log(toString);
-					break;
-				}
-				case LogLevel.Warning:
-				{
-					UnityEngine.Debug.LogWarning(toString);
-					break;
-				}
-				case LogLevel.Error:
-				case LogLevel.Fatal:
-				{
-					UnityEngine.Debug.LogError(toString);
-					break;
-				}
-				default:
-					throw new ArgumentOutOfRangeException(nameof(level), level, null);
-			}
-		}
-
-		[HideInCallstack]
-		[Conditional("ENABLE_LOGS")]
-		private static void LogToUnityWithReference(LogLevel level, string toString, Object context)
-		{
-			switch (level)
-			{
-				case LogLevel.Trace:
-				case LogLevel.Debug:
-				case LogLevel.Info:
-				{
-					UnityEngine.Debug.Log(toString, context);
-					break;
-				}
-				case LogLevel.Warning:
-				{
-					UnityEngine.Debug.LogWarning(toString, context);
-					break;
-				}
-				case LogLevel.Error:
-				case LogLevel.Fatal:
-				{
-					UnityEngine.Debug.LogError(toString, context);
-					break;
-				}
-				default:
-					throw new ArgumentOutOfRangeException(nameof(level), level, null);
+				_sinks[i].Write(in logEvent);
 			}
 		}
 
 		// Assert methods
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
-		public static void Assert(bool condition, string message, Object context = null)
+		public static void Assert(bool condition, string message, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			if (!condition)
 			{
-				LogMessage(message, AssertionFailedTag, Color.red, LogLevel.Error, default, context);
+				Dispatch(new LogEvent(LogLevel.Error, message, AssertionFailedTag, Color.red, default, context, null, member, file, line));
 			}
 		}
 
 		[HideInCallstack]
-		public static void AssertThrow(bool condition, string message, Object context = null)
+		public static void AssertThrow(bool condition, string message, Object context = null,
+			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			if (!condition)
 			{
-				LogMessage($"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, LogLevel.Fatal, default, context);
-				throw new Exception($"Assertion failed: {message}");
+				Dispatch(new LogEvent(LogLevel.Fatal, $"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, default, context, null, member, file, line));
+				throw new System.Exception($"Assertion failed: {message}");
 			}
 		}
 
-		private static string ToStringFast(this LogLevel level)
+		internal static string ToStringFast(this LogLevel level)
 		{
 			return level switch
 			{

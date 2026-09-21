@@ -9,9 +9,11 @@ namespace QBS.Core
 		[Tooltip("Minimum log level to display. Logs below this level will be filtered out.")]
 		private LogLevel minimumLevel = LogLevel.Trace;
 
+		//Stored as the long it is: Unity serializes an enum field as 32 bits, which would drop every
+		//channel past the 32nd now that LogChannel is long-backed.
 		[SerializeField]
-		[Tooltip("Enabled log channels. Only logs from enabled channels will be displayed.")]
-		private LogChannel enabledChannels = LogChannel.All;
+		[Tooltip("Enabled log channels, as a bit mask. Edit from Tools > QBS > Logs > Configure Logging.")]
+		private long enabledChannels = (long) LogChannel.All;
 
 		public LogLevel MinimumLevel
 		{
@@ -21,8 +23,8 @@ namespace QBS.Core
 
 		public LogChannel EnabledChannels
 		{
-			get => enabledChannels;
-			set => enabledChannels = value;
+			get => (LogChannel) enabledChannels;
+			set => enabledChannels = (long) value;
 		}
 	}
 }

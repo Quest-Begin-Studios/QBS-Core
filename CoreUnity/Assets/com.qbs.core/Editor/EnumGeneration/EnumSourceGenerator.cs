@@ -107,8 +107,9 @@ namespace QBS.Core.Editor
 			var index = 0;
 			foreach (var baseEnumValues in baseEnumKeys)
 			{
-				// Calculate flag value as 2^index using bit shift (1 << index)
-				var flagVal = 1 << index;
+				// Calculate flag value as 2^index using bit shift (1 << index). The shift is 64-bit wide so
+				// a long- or ulong-backed enum keeps climbing past bit 31 instead of wrapping negative.
+				var flagVal = 1L << index;
 				_indentedWriter.WriteLine(EnumKeyValueTemplate, baseEnumValues, flagVal.ToString());
 				index++;
 			}

@@ -1,0 +1,42 @@
+using System;
+using UnityEngine;
+using Object = UnityEngine.Object;
+
+namespace QBS.Core
+{
+	/// <summary>
+	///     One log call, as it reaches the sinks: structured, not yet formatted. A crash reporter wants the
+	///     <see cref="Exception" /> object itself, with the stack the runtime captured, rather than a string
+	///     someone appended <c>StackTrace</c> to, and the call site rather than a guess from the message.
+	/// </summary>
+	public readonly struct LogEvent
+	{
+		public readonly LogLevel Level;
+		public readonly LogChannel Channel;
+		public readonly string Tag;
+		public readonly string Message;
+		public readonly Exception Exception;
+		public readonly Color Color;
+		public readonly Object Context;
+
+		//Filled in by the compiler at the call site, so a sink can name the source line for free.
+		public readonly string Member;
+		public readonly string File;
+		public readonly int Line;
+
+		public LogEvent(LogLevel level, string message, string tag, Color color, LogChannel channel,
+			Object context, Exception exception, string member, string file, int line)
+		{
+			Level = level;
+			Message = message;
+			Tag = tag;
+			Color = color;
+			Channel = channel;
+			Context = context;
+			Exception = exception;
+			Member = member;
+			File = file;
+			Line = line;
+		}
+	}
+}
