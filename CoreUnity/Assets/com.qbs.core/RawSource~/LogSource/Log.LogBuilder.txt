@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -11,7 +12,7 @@ namespace QBS.Core
 		public static LogBuilder WithTag(string tag) => new LogBuilder { Tag = tag };
 		public static LogBuilder WithColor(Color color) => new LogBuilder { Color = color };
 		public static LogBuilder WithContext(Object context) => new LogBuilder { Context = context };
-		
+
 		public class LogBuilder
 		{
 			internal LogChannel Channel { get; set; }
@@ -43,31 +44,53 @@ namespace QBS.Core
 				return this;
 			}
 
+			//Each call forwards the caller data it captured, so the site the builder was used at is the
+			//one a sink reports, not this file.
 			[Conditional("ENABLE_LOGS")]
-			public void Trace(string message) => Log.Trace(message, Tag, Color, Channel, Context);
+			public void Trace(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Trace(message, Tag, Color, Channel, Context, member, file, line);
 
 			[Conditional("ENABLE_LOGS")]
-			public void Debug(string message) => Log.Debug(message, Tag, Color, Channel, Context);
+			public void Debug(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Debug(message, Tag, Color, Channel, Context, member, file, line);
 
 			[Conditional("ENABLE_LOGS")]
-			public void Info(string message) => Log.Info(message, Tag, Color, Channel, Context);
+			public void Info(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Info(message, Tag, Color, Channel, Context, member, file, line);
 
 			[Conditional("ENABLE_LOGS")]
-			public void InfoSnipe(string message) => Log.InfoSnipe(message, Tag, Color, Channel, Context);
+			public void InfoSnipe(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.InfoSnipe(message, Tag, Color, Channel, Context, member, file, line);
 
 			//Not [Conditional], for the reason the matching Log methods are not: these have to reach a
 			//crash reporter from a player built without ENABLE_LOGS.
-			public void Warning(string message) => Log.Warning(message, Tag, Color, Channel, Context);
+			public void Warning(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Warning(message, Tag, Color, Channel, Context, member, file, line);
 
-			public void Error(string message) => Log.Error(message, Tag, Color, Channel, Context);
+			public void Error(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Error(message, Tag, Color, Channel, Context, member, file, line);
 
-			public void Error(string message, Exception exception) => 
-				Log.Error(message, exception, Tag, Color, Channel, Context);
+			public void Error(string message, Exception exception,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Error(message, exception, Tag, Color, Channel, Context, member, file, line);
 
-			public void Fatal(string message) => Log.Fatal(message, Tag, Color, Channel, Context);
+			public void Fatal(string message,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Fatal(message, Tag, Color, Channel, Context, member, file, line);
 
-			public void Fatal(string message, Exception exception) => 
-				Log.Fatal(message, exception, Tag, Color, Channel, Context);
+			public void Fatal(string message, Exception exception,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Fatal(message, exception, Tag, Color, Channel, Context, member, file, line);
+
+			public void Exception(Exception exception, string message = null,
+				[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
+				=> Log.Exception(exception, message, Tag, Color, Channel, Context, member, file, line);
 		}
 	}
 }

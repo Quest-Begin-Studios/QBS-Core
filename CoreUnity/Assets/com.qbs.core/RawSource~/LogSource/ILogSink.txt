@@ -1,0 +1,16 @@
+namespace QBS.Core
+{
+	/// <summary>
+	///     Somewhere a log event goes: the Unity console, a crash reporter's breadcrumb trail, an on-screen
+	///     overlay, a file. Register one with <see cref="Log.AddSink" />.
+	/// </summary>
+	/// <remarks>
+	///     Called on whichever thread logged, which on WebGL is always the main one. A sink that throws
+	///     takes the rest of that log call's sinks with it, so a sink doing anything that can fail owns
+	///     its own try/catch.
+	/// </remarks>
+	public interface ILogSink
+	{
+		void Write(in LogEvent logEvent);
+	}
+}

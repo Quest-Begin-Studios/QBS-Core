@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-21
+
+### Added
+
+- **Sinks.** `ILogSink` (`void Write(in LogEvent)`), `Log.AddSink` and `Log.RemoveSink`. Every event that passes `MinimumLevel` and `EnabledChannels` goes to each registered sink, on the calling thread. This is what lets a game feed a crash reporter, an on-screen overlay or a file without the package knowing they exist.
+- **`LogEvent`**, the structured event a sink receives: level, channel, tag, message, exception, colour, context and the call site. A crash reporter can now capture the `Exception` object itself, with the stack the runtime recorded, instead of the text somebody appended `StackTrace` to.
+- **Call-site capture.** Every `Log` method and every `LogBuilder` method takes `[CallerMemberName]`, `[CallerFilePath]` and `[CallerLineNumber]` after its existing optional parameters, so `LogEvent` carries the member, file and line. The compiler fills them in, so this costs nothing at runtime and no existing call site changes.
+- **`Log.Exception(exception, message = null, ...)`**, an entry point at `Error` level for a caught exception; the message defaults to the exception's own. `LogBuilder` has the matching method.
+- **`Log.DefaultSink`**, the `UnitySink` registered at startup, exposed so a game that wants its output somewhere else can remove it.
+
+### Changed
+
+- Console formatting moved out of `Log` and into `UnitySink`, which produces the same string as before: `[Level] [Channel] [Tag]`, the message, colour-wrapped when a colour was given, with any exception appended. The `[ThreadStatic]` builder moved with it. Existing console output is unchanged.
+- `Log.Error(message, exception)` and `Log.Fatal(message, exception)` no longer append `"Passed Exception is null"` when handed a null exception. The event carries a null `Exception` and sinks decide; the Unity sink simply omits the section.
+
 ## [1.2.0] - 2026-09-21
 
 ### Added
