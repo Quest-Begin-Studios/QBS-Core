@@ -35,6 +35,16 @@ namespace QBS.Core
 		[HideInCallstack]
 		public void Write(in LogEvent logEvent)
 		{
+			//Everything below the call, the formatting included, is behind [Conditional]: with ENABLE_LOGS
+			//off there is no console write to make, so the string that would feed it should not be built
+			//either. Write itself cannot carry the attribute; C# refuses it on an interface implementation.
+			WriteToConsole(in logEvent);
+		}
+
+		[HideInCallstack]
+		[Conditional("ENABLE_LOGS")]
+		private static void WriteToConsole(in LogEvent logEvent)
+		{
 			var builder = Builder;
 			builder.Clear();
 			builder.AppendFormat(BracketsFormat, logEvent.Level.ToStringFast());
