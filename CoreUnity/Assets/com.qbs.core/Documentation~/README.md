@@ -125,6 +125,22 @@ LogRules.Set("Acme.Inventory.Save", true);            // ...except Save
 Log.SetChannelEnabled(LogChannel.Core, false);        // Input and Gameplay off
 ```
 
+**Declaring channels**
+- Declare every channel as a `static readonly` field of a `[LogCategories]` class. Never call `LogCategory.Get("…")` inline at a call site: a typo there silently makes a new channel, and the configuration window only lists declared channels before they first log.
+- Name channels after your own namespace (`Acme.Inventory.Save`). Don't start a name with a built-in channel's name (`Network.Transport`), or switching that built-in off silences yours too.
+- Declare a group after all of its members. Field initializers run in order, so a group above one of its members sees `null` and its class fails to initialize.
+- A log call with no channel is filtered by `Log.MinimumLevel` alone.
+
+**Configuring**
+- `Tools > Logs > Configure Logging` switches channels and groups on or off, and sets the minimum level. Settings are saved per machine and to `Assets/Resources/RuntimeLogSettings.asset`, which players load at startup.
+- The same window turns the `ENABLE_LOGS` define on or off. Without it, `Trace`, `Debug`, `Info` and `Warning` calls are compiled out; `Error`, `Fatal` and `Exception` always log.
+- The window checks declared channels whenever it opens or scripts recompile, and reports channels declared outside a `[LogCategories]` class, channels declared twice, classes that fail to initialize, and names under a built-in channel's.
+
+**Upgrading from 1.x**
+- Delete the project's generated `Assets/Plugins/Log/`, or it becomes a second assembly called `Log`.
+- Move the project's own channels and combinations into a `[LogCategories]` class; built-in channels and groups (`LogChannel.Network`, `LogChannel.Core`) need no changes.
+- `Log.EnabledChannels`, `LogChannel.None`, `LogChannel.All` and the channel `ToStringFast()` are gone: use `Log.SetChannelEnabled`, `Log.SetAllChannelsEnabled` and `channel.Name`.
+
 Core's own repository rebuilds the DLLs from `RawSource~` with `Tools > Logs > Build Log DLLs` after changing the log sources. Projects that install the package never do.
 
 ### DLL Generation (Programmatic)
