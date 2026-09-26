@@ -35,15 +35,14 @@ Compile-time code generation via Roslyn. Annotate any enum with `[EnumUtilities]
 
 ### 📝 Log System
 
-#### Log Source Compiler
-A powerful editor tool for managing logging channels and compiling log sources into DLLs.
+#### Channels
+A channel is a `LogCategory` with a dot-separated name. Core ships `Log.dll` and `Log-Editor.dll` prebuilt in `Plugins/Log`, so there is nothing to generate per project.
 
-**Access**: `Tools > QBS > Logs > Log Source Compiler`
-
-**Features**:
-- **Enum Generation**: Configure LogChannel enum keys (name/type/namespace are pre-configured)
-- **Source Compilation**: Reads raw sources from `RawSource~`, generates the enum + `ToStringFast` utility, then compiles into runtime/editor DLLs
-- **Default Channels**: Network, AI, Physics, Audio, UI, Gameplay, Animation, Input, Save/Load, Dialogue, Inventory, Quest, Combat
+- **Built-in channels** (`LogChannel`): Network, AI, Physics, UI, Input, SaveLoad, Loading, Gameplay, Audio, Rendering, and the groups Core (Input, Gameplay), Presentation (UI, Rendering, Audio) and Simulation (AI, Physics, Core)
+- **Package and game channels**: `static readonly` fields of a `[LogCategories]` class, named after the owner's namespace (`Acme.Inventory.Save`) so names never collide
+- **Groups**: `LogCategory.Group(name, members…)`. You log to a group like a channel; it is on while any member is
+- **Rules**: `LogRules` switches a name and everything under it; the longest matching rule wins. Level filtering stays global (`Log.MinimumLevel`)
+- **Configuration**: `Tools > Logs > Configure Logging`, which also reports undeclared categories and names that fall under a built-in channel's
 
 ### 🔨 DLL Generation
 
@@ -101,17 +100,32 @@ using QBS.Core.Editor;
 // Generated source is displayed and can be copied to clipboard
 ```
 
-### Log Source Compilation
+### Log Channels
 
 ```csharp
-// Access via Tools > QBS > Logs > Log Source Compiler
+using QBS.Core;
 
-// 1. Add or remove LogChannel enum keys in the Enum Generation section
-// 2. Click 'Generate Enum' — reads sources from RawSource~ and generates
-//    the enum + ToStringFast utility code
-// 3. Click 'Generate DLL' — compiles all sources into runtime and editor
-//    DLLs under Assets/Plugins/Log/
+// Declare a package's channels once, in its own assembly.
+[LogCategories]
+public static class InventoryLog
+{
+    public static readonly LogCategory Save = LogCategory.Get("Acme.Inventory.Save");
+    public static readonly LogCategory Crafting = LogCategory.Get("Acme.Inventory.Crafting");
+
+    // Groups after their members: field initializers run in order.
+    public static readonly LogCategory Gear = LogCategory.Group("Acme.Gear", Save, LogChannel.Gameplay);
+}
+
+Log.Info("Connected", channel: LogChannel.Network);   // [Info] [Network] Connected
+Log.Warning("Slow save", channel: InventoryLog.Save);
+Log.Info("Equipped", channel: InventoryLog.Gear);     // on while Save or Gameplay is
+
+LogRules.Set("Acme.Inventory", false);                // the whole branch off...
+LogRules.Set("Acme.Inventory.Save", true);            // ...except Save
+Log.SetChannelEnabled(LogChannel.Core, false);        // Input and Gameplay off
 ```
+
+Core's own repository rebuilds the DLLs from `RawSource~` with `Tools > Logs > Build Log DLLs` after changing the log sources. Projects that install the package never do.
 
 ### DLL Generation (Programmatic)
 
@@ -181,14 +195,15 @@ com.qbs.core/
 ├── Editor/
 │   ├── DLLGeneration/             # Roslyn-based DLL compilation
 │   ├── EnumGeneration/            # Enum code generation editor tool
-│   ├── Log/                       # Log system and compiler tools
+│   ├── Log/                       # Log DLL builder
 │   └── QBS.Core.Editor.asmdef
 │
 ├── Plugins/
+│   ├── Log/                       # Prebuilt Log.dll and Log-Editor.dll
 │   ├── Roslyn/Editor/             # Roslyn compiler DLLs (editor-only)
 │   └── SourceGen/                 # Roslyn source generator DLLs
 │
-├── RawSource~/                    # Raw log source files (excluded from builds)
+├── RawSource~/                    # Log sources the Log DLLs are built from (excluded from builds)
 └── Documentation~/                # Additional documentation
 ```
 
@@ -202,8 +217,9 @@ com.qbs.core/
 
 ### Key Classes
 
-- `EnumGeneratorComponent` - Enum generation UI and logic (shared by Enum Generator window and Log Source Compiler)
-- `LogSourceCompiler` - Log channel management and DLL compilation
+- `EnumGeneratorComponent` - Enum generation UI and logic
+- `LogCategory` / `LogRules` / `LogChannel` - Log channels, the rules that switch them, and the built-in set
+- `LogDllBuilder` - Builds the prebuilt Log DLLs from `RawSource~` (core's repository only)
 - `DLLGenerator` - Low-level Roslyn-based DLL compilation
 - `DLLGenerationHelper` - High-level static API; auto-splits sources into runtime/editor and retries on missing assembly errors
 - `AssemblyCompat` - Version-safe assembly lookups (`GetLoadedAssemblies`, `GetAssemblyPath`)

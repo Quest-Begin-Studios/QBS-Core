@@ -1,0 +1,27 @@
+namespace QBS.Core
+{
+	/// <summary>
+	///     The channels core provides, under flat names. A package or game declares its own the same way, in its
+	///     own <see cref="LogCategoriesAttribute" /> class, named after its namespace (<c>Acme.Inventory.Save</c>)
+	///     so its names can't collide with anyone else's.
+	/// </summary>
+	[LogCategories]
+	public static class LogChannel
+	{
+		public static readonly LogCategory Network = LogCategory.Get("Network");
+		public static readonly LogCategory AI = LogCategory.Get("AI");
+		public static readonly LogCategory Physics = LogCategory.Get("Physics");
+		public static readonly LogCategory UI = LogCategory.Get("UI");
+		public static readonly LogCategory Input = LogCategory.Get("Input");
+		public static readonly LogCategory SaveLoad = LogCategory.Get("SaveLoad");
+		public static readonly LogCategory Loading = LogCategory.Get("Loading");
+		public static readonly LogCategory Gameplay = LogCategory.Get("Gameplay");
+		public static readonly LogCategory Audio = LogCategory.Get("Audio");
+		public static readonly LogCategory Rendering = LogCategory.Get("Rendering");
+
+		//Groups after the channels they contain: field initializers run in order.
+		public static readonly LogCategory Core = LogCategory.Group("Core", Input, Gameplay);
+		public static readonly LogCategory Presentation = LogCategory.Group("Presentation", UI, Rendering, Audio);
+		public static readonly LogCategory Simulation = LogCategory.Group("Simulation", AI, Physics, Core);
+	}
+}

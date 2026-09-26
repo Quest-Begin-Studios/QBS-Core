@@ -32,13 +32,29 @@ namespace QBS.Core.Editor
         public static bool TryGeneratingDLL(IEnumerable<SourceFile> sources, string outputDLLFolderName, string dllName,
             List<string> runtimeAssemblyReferences = null, List<string> editorAssemblyReferences = null, List<string> scriptingSymbols = null)
         {
+            var pathToPluginsFolder = Path.Combine(Application.dataPath, PluginsFolderName, outputDLLFolderName);
+            return TryGeneratingDLLAt(sources, pathToPluginsFolder, dllName, runtimeAssemblyReferences, editorAssemblyReferences, scriptingSymbols);
+        }
+
+        /// <summary>
+        ///     As <see cref="TryGeneratingDLL" />, into any folder: the DLLs go to its Runtime and Editor subfolders.
+        ///     The folder is deleted if either compilation fails, so it should be one nothing else lives in.
+        /// </summary>
+        /// <param name="sources">Collection of source files to compile into DLLs</param>
+        /// <param name="pathToPluginsFolder">Absolute path of the folder to create the Runtime and Editor folders in</param>
+        /// <param name="dllName">Name of the DLL files to generate</param>
+        /// <param name="runtimeAssemblyReferences">Additional assembly references to include in runtime compilation</param>
+        /// <param name="editorAssemblyReferences">Additional assembly references to include in editor compilation</param>
+        /// <param name="scriptingSymbols">Scripting symbols to define during compilation</param>
+        /// <returns>True if both runtime and editor DLL generation succeeded; otherwise false</returns>
+        public static bool TryGeneratingDLLAt(IEnumerable<SourceFile> sources, string pathToPluginsFolder, string dllName,
+            List<string> runtimeAssemblyReferences = null, List<string> editorAssemblyReferences = null, List<string> scriptingSymbols = null)
+        {
             var editorSources = new List<SourceFile>();
             var runtimeSources = new List<SourceFile>();
 
             // Group sources by lifetime: runtime or editor.
             GroupSourcesByLifetime(sources, editorSources, runtimeSources);
-
-            var pathToPluginsFolder = Path.Combine(Application.dataPath, PluginsFolderName, outputDLLFolderName);
 
             // Compile runtime sources first,
             // since editor sources will always be dependent on runtime sources.

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-27
+
+Channels are declared categories instead of a generated enum. Core now ships `Log.dll` and `Log-Editor.dll` prebuilt, so a project no longer compiles its own, and a package can bring its own channels in plain code.
+
+### Added
+
+- **`LogCategory`**, a channel identified by a dot-separated name (`Acme.Inventory.Save`). `LogCategory.Get(name)` returns the one instance for a name. Declare categories as `static readonly` fields of a class marked **`[LogCategories]`**.
+- **`LogCategory.Group(name, members…)`**, the replacement for flags combinations. A group can be logged to: an event on it gets through while any member is on, and the console prints the group's own name, as it did for a combination. Nested groups are flattened when created, and a group can mix built-in, package and game categories.
+- **`LogRules`**, prefix rules that switch categories on or off. The longest matching rule wins, and a prefix only matches at a dot, so `Acme.Inventory Off` silences `Acme.Inventory.Save` but not `Acme.InventoryUI`. `*` is the root. Every change updates every category at once under one lock, so a log call only reads a flag.
+- `Log.SetAllChannelsEnabled(bool)`.
+- The log menus move from `Tools > QBS > Logs` to `Tools > Logs`, and the settings asset's create menu from `QBS > Runtime Log Settings` to `Logs > Runtime Log Settings`.
+- The Log Configuration window is redesigned: channels as on/off pills in a card per owner (built-in first, then each package's or game's first name segment), groups coloured by how many members are on, the minimum level as a row of level buttons, and a search field. Whenever it opens or scripts recompile, it checks declared channels and reports categories not declared in any `[LogCategories]` class, categories declared by more than one class, classes whose initialization threw, and names that fall under a built-in channel's (`Network.Transport` under `Network`). Categories declared only in editor assemblies are marked `(editor)`.
+- **`Tools > Logs > Build Log DLLs`** (`LogDllBuilder`), which builds both DLLs from `RawSource~` into the package's `Plugins/Log`. It is only available where the package is embedded, local or kept under `Assets`, as in core's repository. For CI: `LogDllBuilder.BuildHeadless`.
+- `DLLGenerationHelper.TryGeneratingDLLAt`, which builds into any folder instead of `Assets/Plugins`.
+
+### Changed
+
+- **`LogChannel` is a static class of `LogCategory` fields** holding the ten built-in channels, under the same flat names (`Network`, `AI`, …), and the `Core`, `Presentation` and `Simulation` groups. Call sites written `channel: LogChannel.X` compile unchanged. A game declares its own channels and combinations in its own `[LogCategories]` class.
+- The `channel` parameter of every `Log` and `LogBuilder` method is a `LogCategory` (default `null`), and so is `LogEvent.Channel`.
+- `Log.SetChannelEnabled` and `Log.IsChannelEnabled` take a `LogCategory`. Setting writes rules. Switching a group writes a rule for each member, as clearing a combination cleared its bits. A category switched back to the state it would inherit has its own rule removed, so toggling leaves no rules behind.
+- `UnitySink` prints `Channel.Name`.
+- `RuntimeLogSettings` stores `List<LogRule> rules` in place of the `long enabledChannels` mask, and lives at `Assets/Resources/RuntimeLogSettings.asset`. `LogRuntimeInitializer` has always loaded it from `Resources`, but the window saved it under `Assets/Plugins/Log/Runtime`, so players never picked it up.
+- Editor rules are saved under the `QBS_Log_Rules` EditorPrefs key, as JSON. A machine with none saved starts from the project's `RuntimeLogSettings`.
+
+### Removed
+
+- The generated `LogChannel` enum, `LogChannel.None`, `LogChannel.All`, `Log.EnabledChannels` and the channel `ToStringFast`.
+- `LogSourceCompiler` and its headless path, `LogPackageAutoSetup` and `LogChannelDefaults`. Projects no longer generate `Assets/Plugins/Log/`; a project upgrading from 1.x deletes it, or it becomes a second assembly called `Log`.
+
 ## [1.3.0] - 2026-09-21
 
 ### Added

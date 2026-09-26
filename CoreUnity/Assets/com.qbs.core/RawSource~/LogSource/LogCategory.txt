@@ -1,0 +1,219 @@
+using System;
+using System.Collections.Generic;
+
+namespace QBS.Core
+{
+	/// <summary>
+	///     What a log call is about: a dot-separated name such as <c>Acme.Inventory.Save</c>, or a group of
+	///     categories that is logged to as one. A category is on or off according to <see cref="LogRules" />;
+	///     a group is on while any of its members is, which is how a flags combination behaved.
+	/// </summary>
+	/// <remarks>
+	///     Declare every category as a <c>static readonly</c> field of a class marked
+	///     <see cref="LogCategoriesAttribute" />, never inline at a call site. <see cref="Get" /> creates whatever
+	///     name it is handed, so a typo there is a new category nobody switches, and the config window can only
+	///     list declared categories before they first log.
+	/// </remarks>
+	public sealed class LogCategory
+	{
+		private static readonly Dictionary<string, LogCategory> Interned = new(StringComparer.Ordinal);
+		private static readonly List<LogCategory> Groups = new();
+
+		//Null for a category. For a group, its leaf categories: flattened when it is created, so a group
+		//never has to look through another group to decide whether it is on.
+		private readonly LogCategory[] _members;
+
+		//Written only under LogRules.Gate, read by every log call. Not volatile: a thread that sees a toggle one
+		//call late loses nothing, and on ARM a volatile read would put a barrier into every log call.
+		internal bool Enabled;
+
+		private LogCategory(string name, LogCategory[] members)
+		{
+			Name = name;
+			_members = members;
+		}
+
+		public string Name { get; }
+
+		public bool IsGroup => _members != null;
+
+		/// <summary>The categories a group logs through, nested groups flattened; empty for a category.</summary>
+		public IReadOnlyList<LogCategory> Members => _members ?? Array.Empty<LogCategory>();
+
+		internal LogCategory[] Leaves => _members;
+
+		/// <summary>Every category and group created so far, in no particular order.</summary>
+		public static IReadOnlyList<LogCategory> All
+		{
+			get
+			{
+				lock (LogRules.Gate)
+				{
+					var all = new LogCategory[Interned.Count];
+					Interned.Values.CopyTo(all, 0);
+					return all;
+				}
+			}
+		}
+
+		/// <summary>
+		///     The category with this name, created on first use. The same name always gives the same instance.
+		/// </summary>
+		public static LogCategory Get(string name)
+		{
+			ValidateName(name);
+
+			//The same lock as every rule change: a category created while a rule changes either exists before the
+			//change, so the change reaches it, or resolves against the rules the change left behind.
+			lock (LogRules.Gate)
+			{
+				if (Interned.TryGetValue(name, out var existing))
+				{
+					return existing;
+				}
+
+				var category = new LogCategory(name, null) { Enabled = LogRules.Resolve(name) };
+				Interned.Add(name, category);
+				return category;
+			}
+		}
+
+		/// <summary>
+		///     A group logged to like a category: an event on it gets through while any member is on, and a sink
+		///     sees the group's own name. Switching a group writes rules for its members, never for the group.
+		/// </summary>
+		public static LogCategory Group(string name, params LogCategory[] members)
+		{
+			ValidateName(name);
+
+			if (members == null || members.Length == 0)
+			{
+				throw new ArgumentException($"Group '{name}' needs at least one member.", nameof(members));
+			}
+
+			for (var i = 0; i < members.Length; i++)
+			{
+				if (members[i] == null)
+				{
+					throw new ArgumentNullException
+					(
+						nameof(members),
+						$"Member {i} of group '{name}' is null. A group declared above one of its members in the same "
+						+ "class runs before that member exists; declare groups after their members."
+					);
+				}
+			}
+
+			lock (LogRules.Gate)
+			{
+				if (Interned.ContainsKey(name))
+				{
+					throw new ArgumentException($"'{name}' is already a category or group.", nameof(name));
+				}
+
+				var leaves = Flatten(members);
+				var group = new LogCategory(name, leaves) { Enabled = AnyEnabled(leaves) };
+				Interned.Add(name, group);
+				Groups.Add(group);
+				return group;
+			}
+		}
+
+		public override string ToString()
+		{
+			return Name;
+		}
+
+		/// <summary>Re-resolves every category, then every group from its members. Called under LogRules.Gate.</summary>
+		internal static void ReapplyAll()
+		{
+			foreach (var category in Interned.Values)
+			{
+				if (category._members == null)
+				{
+					category.Enabled = LogRules.Resolve(category.Name);
+				}
+			}
+
+			//After the categories, whose flags these read.
+			foreach (var group in Groups)
+			{
+				group.Enabled = AnyEnabled(group._members);
+			}
+		}
+
+		private static bool AnyEnabled(LogCategory[] leaves)
+		{
+			foreach (var leaf in leaves)
+			{
+				if (leaf.Enabled)
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		//Two passes instead of LINQ: the first sizes the one array that is kept, the second fills it. Duplicates are
+		//dropped with a linear scan, which beats a HashSet at the sizes groups have.
+		private static LogCategory[] Flatten(LogCategory[] members)
+		{
+			var count = 0;
+			foreach (var member in members)
+			{
+				count += member._members?.Length ?? 1;
+			}
+
+			var leaves = new LogCategory[count];
+			var filled = 0;
+			foreach (var member in members)
+			{
+				if (member._members == null)
+				{
+					filled = AddLeaf(leaves, filled, member);
+					continue;
+				}
+
+				foreach (var leaf in member._members)
+				{
+					filled = AddLeaf(leaves, filled, leaf);
+				}
+			}
+
+			if (filled < leaves.Length)
+			{
+				Array.Resize(ref leaves, filled);
+			}
+
+			return leaves;
+		}
+
+		private static int AddLeaf(LogCategory[] leaves, int filled, LogCategory leaf)
+		{
+			for (var i = 0; i < filled; i++)
+			{
+				if (ReferenceEquals(leaves[i], leaf))
+				{
+					return filled;
+				}
+			}
+
+			leaves[filled] = leaf;
+			return filled + 1;
+		}
+
+		private static void ValidateName(string name)
+		{
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				throw new ArgumentException("A log category needs a name.", nameof(name));
+			}
+
+			if (name == LogRules.Root)
+			{
+				throw new ArgumentException($"'{LogRules.Root}' is the root rule, not a category name.", nameof(name));
+			}
+		}
+	}
+}

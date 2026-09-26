@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -5,7 +6,7 @@ namespace QBS.Core.Editor
 {
 	public static class LogEditorMenu
 	{
-		private const string MenuRoot = "Tools/QBS/Logs/";
+		private const string MenuRoot = "Tools/Logs/";
 		private const string ConfigureMenu = MenuRoot + "Configure Logging";
 
 		[MenuItem(ConfigureMenu, false, 1)]
@@ -18,7 +19,7 @@ namespace QBS.Core.Editor
 		private static void InitializeLogSettings()
 		{
 			RestoreMinimumLogLevel();
-			RestoreActiveLogChannels();
+			RestoreRules();
 			WarnUserAboutInactiveLogs();
 
 			EditorApplication.quitting -= OnQuit;
@@ -35,7 +36,7 @@ namespace QBS.Core.Editor
 				return;
 			}
 
-			LogEditorUtility.WriteActiveChannels(Log.EnabledChannels);
+			LogEditorUtility.WriteRules(LogRules.All);
 			EditorPrefs.SetInt(LogEditorConstants.MinimumLevel, (int)Log.MinimumLevel);
 		}
 
@@ -50,9 +51,9 @@ namespace QBS.Core.Editor
 
 			Debug.LogError
 			(
-				"QBS Logging is disabled. Enable it in the "
+				"Logging is disabled. Enable it in the "
 				+ "Log Configuration window to utilize the logging utility."
-				+ " \nTools -> QBS -> Logging -> Configure Logging "
+				+ " \nTools -> Logs -> Configure Logging "
 			);
 
 			EditorPrefs.SetBool(LogEditorConstants.LogsDisabledWarningShown, true);
@@ -72,9 +73,12 @@ namespace QBS.Core.Editor
 			}
 		}
 
-		private static void RestoreActiveLogChannels()
+		private static void RestoreRules()
 		{
-			Log.EnabledChannels = LogEditorUtility.ReadActiveChannels();
+			//Nothing saved on this machine yet: start from the project's shipped settings, so a fresh checkout
+			//sees the channels the build will rather than everything on.
+			var rules = (IEnumerable<LogRule>)LogEditorUtility.ReadRules() ?? LogEditorUtility.LoadRuntimeSettings()?.Rules;
+			LogRules.Load(rules);
 		}
 
 		private static void OnQuit()

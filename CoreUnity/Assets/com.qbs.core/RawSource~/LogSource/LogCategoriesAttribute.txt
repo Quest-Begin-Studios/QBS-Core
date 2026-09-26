@@ -1,0 +1,14 @@
+using System;
+
+namespace QBS.Core
+{
+	/// <summary>
+	///     Marks a class whose <c>static readonly</c> <see cref="LogCategory" /> fields declare a package's or
+	///     game's categories and groups. The config window finds these classes to list every category before it
+	///     first logs, and Validate reports categories that no such class declares.
+	/// </summary>
+	[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+	public sealed class LogCategoriesAttribute : Attribute
+	{
+	}
+}

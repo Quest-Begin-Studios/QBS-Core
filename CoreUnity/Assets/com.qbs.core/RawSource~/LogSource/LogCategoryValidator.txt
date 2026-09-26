@@ -1,0 +1,147 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using UnityEditor;
+using UnityEditor.Compilation;
+
+namespace QBS.Core.Editor
+{
+	/// <summary>
+	///     Finds every <see cref="LogCategoriesAttribute" /> class, creates what they declare, and reports what
+	///     would surprise someone switching channels. Editor-only and on demand, so neither players nor logging
+	///     pay for any of it.
+	/// </summary>
+	public static class LogCategoryValidator
+	{
+		public sealed class Report
+		{
+			public readonly List<string> Problems = new();
+
+			/// <summary>Categories declared only in editor assemblies, which never log in a player.</summary>
+			public readonly HashSet<LogCategory> EditorOnly = new();
+		}
+
+		public static Report Run()
+		{
+			var report = new Report();
+			var declaredBy = new Dictionary<LogCategory, List<Type>>();
+
+			foreach (var type in TypeCache.GetTypesWithAttribute<LogCategoriesAttribute>())
+			{
+				try
+				{
+					RuntimeHelpers.RunClassConstructor(type.TypeHandle);
+				}
+				catch (TypeInitializationException exception)
+				{
+					var cause = exception.InnerException ?? exception;
+					report.Problems.Add($"{type.FullName} failed to initialize, so none of its categories exist: {cause.Message}");
+					continue;
+				}
+
+				foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+				{
+					if (field.FieldType != typeof(LogCategory) || field.GetValue(null) is not LogCategory category)
+					{
+						continue;
+					}
+
+					if (!declaredBy.TryGetValue(category, out var types))
+					{
+						declaredBy[category] = types = new List<Type>();
+					}
+
+					if (!types.Contains(type))
+					{
+						types.Add(type);
+					}
+				}
+			}
+
+			var builtInNames = GetBuiltInNames();
+			var editorOnlyAssemblies = GetEditorOnlyAssemblyNames();
+
+			foreach (var category in LogCategory.All.OrderBy(c => c.Name, StringComparer.Ordinal))
+			{
+				if (!declaredBy.TryGetValue(category, out var types))
+				{
+					report.Problems.Add
+					(
+						$"'{category.Name}' isn't declared in any [LogCategories] class, so it can't be listed or "
+						+ "switched before it first logs. Declare it as a static readonly field of one."
+					);
+				}
+				else
+				{
+					if (types.Count > 1)
+					{
+						report.Problems.Add
+						(
+							$"'{category.Name}' is declared by {string.Join(" and ", types.Select(t => t.FullName))}. "
+							+ "They share one switch."
+						);
+					}
+
+					if (types.All(t => editorOnlyAssemblies.Contains(t.Assembly.GetName().Name)))
+					{
+						report.EditorOnly.Add(category);
+					}
+				}
+
+				var dot = category.Name.IndexOf('.');
+				if (dot > 0)
+				{
+					var root = category.Name.Substring(0, dot);
+					if (builtInNames.Contains(root))
+					{
+						report.Problems.Add
+						(
+							$"'{category.Name}' sits under the built-in channel '{root}', so switching '{root}' off "
+							+ "silences it too. Use a name that doesn't start with a built-in channel's."
+						);
+					}
+				}
+			}
+
+			return report;
+		}
+
+		private static HashSet<string> GetBuiltInNames()
+		{
+			var names = new HashSet<string>(StringComparer.Ordinal);
+			foreach (var field in typeof(LogChannel).GetFields(BindingFlags.Public | BindingFlags.Static))
+			{
+				if (field.GetValue(null) is LogCategory { IsGroup: false } category)
+				{
+					names.Add(category.Name);
+				}
+			}
+
+			return names;
+		}
+
+		//Compiled for the editor but not for players. Precompiled DLLs appear in neither list, so they count as
+		//runtime code, which is the safe way to be wrong.
+		private static HashSet<string> GetEditorOnlyAssemblyNames()
+		{
+			var player = new HashSet<string>(StringComparer.Ordinal);
+			foreach (var assembly in CompilationPipeline.GetAssemblies(AssembliesType.PlayerWithoutTestAssemblies))
+			{
+				player.Add(assembly.name);
+			}
+
+			var editorOnly = new HashSet<string>(StringComparer.Ordinal);
+			foreach (var assembly in CompilationPipeline.GetAssemblies(AssembliesType.Editor))
+			{
+				if (!player.Contains(assembly.name))
+				{
+					editorOnly.Add(assembly.name);
+				}
+			}
+
+			return editorOnly;
+		}
+	}
+}

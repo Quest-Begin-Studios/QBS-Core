@@ -49,9 +49,9 @@ namespace QBS.Core
 			builder.Clear();
 			builder.AppendFormat(BracketsFormat, logEvent.Level.ToStringFast());
 
-			if (logEvent.Channel != default)
+			if (logEvent.Channel != null)
 			{
-				builder.AppendFormat(BracketsFormat, logEvent.Channel.ToStringFast());
+				builder.AppendFormat(BracketsFormat, logEvent.Channel.Name);
 			}
 
 			if (logEvent.Tag != null)

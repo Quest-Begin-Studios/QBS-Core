@@ -13,6 +13,7 @@
         "UnityEditor.CoreModule",
         "UnityEngine.CoreModule",
         "UnityEngine.IMGUIModule",
+        "UnityEngine.JSONSerializeModule",
         "UnityEngine.SharedInternalsModule",
         "UnityEngine.TextRenderingModule"
     ]
