@@ -1,0 +1,31 @@
+{
+    "StartBit": 0,
+    "Direction": "Up",
+    "Capacity": 16,
+    "Channels": [
+        "Network",
+        "AI",
+        "Physics",
+        "UI",
+        "Input",
+        "SaveLoad",
+        "Loading",
+        "Gameplay",
+        "Audio",
+        "Rendering"
+    ],
+    "Combinations": [
+        {
+            "Name": "Core",
+            "Flags": [ "Input", "Gameplay" ]
+        },
+        {
+            "Name": "Presentation",
+            "Flags": [ "UI", "Rendering", "Audio" ]
+        },
+        {
+            "Name": "Simulation",
+            "Flags": [ "AI", "Physics", "Core" ]
+        }
+    ]
+}

@@ -11,6 +11,18 @@ namespace QBS.Core.Editor
         {
             if (!LogDLLsExist())
                 EditorApplication.delayCall += RunAutoSetup;
+            else
+                EditorApplication.delayCall += WarnIfChannelsOutOfDate;
+        }
+
+        //Only a missing DLL is rebuilt unattended. A stale one is reported instead, since regenerating can
+        //move saved masks and is worth someone looking at the window first.
+        private static void WarnIfChannelsOutOfDate()
+        {
+            if (LogSourceCompiler.TryDescribeOutdatedChannels(out var description))
+            {
+                Debug.LogWarning($"[QBS] {description}\nRegenerate with Tools > QBS > Logs > Log Source Compiler.");
+            }
         }
 
         private static bool LogDLLsExist()

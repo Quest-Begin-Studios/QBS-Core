@@ -28,6 +28,13 @@ namespace QBS.Core.Editor
         private List<string> _editorAssemblyReferences;
         private readonly List<string> _scriptingSymbols = new() { "ENABLE_LOGS" };
 
+        private List<LogChannelSource> _channelSources;
+        private List<LogChannelSource> _missingChannelSources;
+        private readonly List<string> _channelLoadErrors = new();
+        private readonly List<string> _channelErrors = new();
+        private readonly Dictionary<LogChannelSource, string> _newChannelNames = new();
+        private Dictionary<string, long> _generatedChannelValues;
+
         [MenuItem("Tools/QBS/Logs/Log Source Compiler")]
         public static void ShowWindow()
         {
@@ -55,23 +62,68 @@ namespace QBS.Core.Editor
                 EnumGeneratorComponent.EnumTypeOption.Flags,
                 EnumGeneratorComponent.BackingType.Long
             );
-            //Opening on the defaults would drop a game's own channels the next time anyone pressed
-            //Generate, so the project's compiled enum wins whenever there is one to read.
-            if (TryReadCompiledChannels(out var baseKeys, out var flagCombinations))
+
+            ReloadChannelSources();
+        }
+
+        /// <summary>
+        ///     Reads every manifest from disk, discarding unsaved edits. When the project has no manifest of
+        ///     its own but its compiled enum has channels no manifest declares, those are listed as a new
+        ///     project manifest, so generating from manifests never drops a game's channels from under its
+        ///     own call sites.
+        /// </summary>
+        private void ReloadChannelSources()
+        {
+            _channelLoadErrors.Clear();
+            _newChannelNames.Clear();
+            _channelSources = LogChannelResolver.FindSources(_channelLoadErrors);
+
+            var carriedOver = CreateProjectSourceFromCompiled(_channelSources);
+            if (carriedOver != null)
             {
+                _channelSources.Add(carriedOver);
                 _channelSourceSummary =
-                    $"Populated from the {LogChannelsName} compiled into this project: {baseKeys.Count} channels, "
-                    + $"{flagCombinations.Count} combinations. Generating rewrites exactly what is listed below.";
+                    $"{carriedOver.Manifest.Channels.Count} channels compiled into this project are in no "
+                    + $"{LogChannelManifest.FileName}. They are listed under {LogChannelResolver.ProjectOwner}, counting "
+                    + $"down from bit {carriedOver.Manifest.StartBit}, and saved to {LogChannelResolver.ProjectManifestPath} "
+                    + "when you generate. Saved channel masks follow them to their new bits.";
             }
             else
             {
-                baseKeys = LogChannelDefaults.BaseKeys;
-                flagCombinations = LogChannelDefaults.FlagCombinations;
                 _channelSourceSummary =
-                    $"No {LogChannelsName} is compiled into this project yet, so the studio defaults are listed.";
+                    $"Channels come from every {LogChannelManifest.FileName} in the project. Greyed-out ones belong to "
+                    + "packages installed read-only. Channels are pinned to bits, so a list only grows: retire a "
+                    + "channel rather than delete it.";
             }
 
-            _enumGenerator.ConfigureEnumKeys(baseKeys, flagCombinations);
+            _missingChannelSources = LogChannelResolver.FindMissingEditableSources(_channelSources);
+            ResolveChannels(new List<FlagSegment>(), new List<EnumGeneratorComponent.FlagCombinationEntry>());
+        }
+
+        private bool ResolveChannels(List<FlagSegment> segments, List<EnumGeneratorComponent.FlagCombinationEntry> combinations)
+        {
+            _channelErrors.Clear();
+            _channelErrors.AddRange(_channelLoadErrors);
+            return LogChannelResolver.Resolve(_channelSources, segments, combinations, _channelErrors)
+                   && _channelLoadErrors.Count == 0;
+        }
+
+        private void SaveDirtyManifests()
+        {
+            var saved = false;
+            foreach (var source in _channelSources)
+            {
+                if (source.IsDirty && source.IsEditable)
+                {
+                    LogChannelResolver.Save(source);
+                    saved = true;
+                }
+            }
+
+            if (saved)
+            {
+                AssetDatabase.Refresh();
+            }
         }
 
         private void OnDisable()
@@ -82,6 +134,10 @@ namespace QBS.Core.Editor
             _capturedEnumCode = "";
             _runtimeAssemblyReferences = null;
             _editorAssemblyReferences = null;
+
+            _channelSources = null;
+            _missingChannelSources = null;
+            _generatedChannelValues = null;
         }
 
         private void OnGUI()
@@ -98,8 +154,8 @@ namespace QBS.Core.Editor
             (
                 "This tool compiles log sources into a DLL.\n\n" +
                 "Steps:\n" +
-                "1. Configure and add LogChannel enum keys below\n" +
-                "2. Click 'Generate Enum' to create the enum and read sources from RawSource~ folder\n" +
+                "1. Review the LogChannels.json manifests below; edit the project's and any embedded package's\n" +
+                "2. Click 'Generate Enum' to save them, lay the channels out on their bits and read sources from RawSource~ folder\n" +
                 "3. Click 'Generate DLL' to compile the final DLL\n\n" +
                 "Output: The compiled DLL will be placed in the Plugins folder.",
                 helpBoxStyle
@@ -134,6 +190,8 @@ namespace QBS.Core.Editor
             if (GUILayout.Button("Generate DLL", GUILayout.Height(50)))
             {
                 GUI.backgroundColor = originalColor;
+                //Read before the new DLL replaces it: the masks are carried from this layout to the new one.
+                var previousChannelValues = ReadCompiledChannelValues();
                 var dllGenerationSuccess = DLLGenerationHelper.TryGeneratingDLL
                 (
                     _sourceFiles,
@@ -146,6 +204,7 @@ namespace QBS.Core.Editor
 
                 if (dllGenerationSuccess)
                 {
+                    RemapSavedChannelMasks(previousChannelValues, _generatedChannelValues);
                     AssetDatabase.SaveAssets();
                     AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
                     EditorUtility.RequestScriptReload();
@@ -170,9 +229,27 @@ namespace QBS.Core.Editor
             _enumGenerator.DrawConfigurationGUI();
             EditorGUI.EndDisabledGroup();
 
-            _enumGenerator.DrawEnumListGUI();
+            DrawChannelSourcesGUI();
 
             EditorGUILayout.EndScrollView();
+
+            if (_channelErrors.Count > 0)
+            {
+                EditorGUILayout.HelpBox(string.Join("\n", _channelErrors), MessageType.Error);
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Save Manifests"))
+            {
+                SaveDirtyManifests();
+            }
+
+            if (GUILayout.Button("Reload From Disk"))
+            {
+                ReloadChannelSources();
+            }
+
+            EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.Space(5);
 
@@ -181,16 +258,29 @@ namespace QBS.Core.Editor
                 _sourceFiles.Clear();
                 _runtimeAssemblyReferences.Clear();
                 _editorAssemblyReferences.Clear();
+                _capturedEnumCode = "";
 
                 ReadSources(_sourceFiles, _runtimeAssemblyReferences, _editorAssemblyReferences);
 
-                var enumGenSuccess = _enumGenerator.GenerateEnum();
+                var segments = new List<FlagSegment>();
+                var combinations = new List<EnumGeneratorComponent.FlagCombinationEntry>();
 
-                if (enumGenSuccess)
+                //A clash stops here rather than move a channel something was compiled against.
+                if (ResolveChannels(segments, combinations))
                 {
-                    _capturedEnumCode = _enumGenerator.GeneratedCode;
-                    //Also generate the relevant ToStringNoBox methods:
-                    GenerateEnumHelpers();
+                    SaveDirtyManifests();
+                    _enumGenerator.ConfigureFlagSegments(segments);
+                    _enumGenerator.ConfigureEnumKeys(flagCombinations: combinations);
+
+                    var enumGenSuccess = _enumGenerator.GenerateEnum();
+
+                    if (enumGenSuccess)
+                    {
+                        _capturedEnumCode = _enumGenerator.GeneratedCode;
+                        _generatedChannelValues = LogChannelResolver.GetChannelValues(segments);
+                        //Also generate the relevant ToStringNoBox methods:
+                        GenerateEnumHelpers();
+                    }
                 }
             }
 
@@ -217,6 +307,182 @@ namespace QBS.Core.Editor
 
                 EditorGUILayout.EndVertical();
             }
+        }
+
+        private void DrawChannelSourcesGUI()
+        {
+            GUILayout.Label("Log Channels", EditorStyles.boldLabel);
+
+            var changed = false;
+            foreach (var source in _channelSources)
+            {
+                changed |= DrawChannelSource(source);
+            }
+
+            LogChannelSource created = null;
+            foreach (var missing in _missingChannelSources)
+            {
+                if (GUILayout.Button($"Add a {LogChannelManifest.FileName} to {missing.Owner}"))
+                {
+                    created = missing;
+                }
+            }
+
+            if (created != null)
+            {
+                //Laid out now and never again: from here on the file itself says where its channels go.
+                created.Manifest = LogChannelResolver.CreateManifest(created.IsPackage, _channelSources);
+                created.IsDirty = true;
+                _missingChannelSources.Remove(created);
+                _channelSources.Add(created);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                ResolveChannels(new List<FlagSegment>(), new List<EnumGeneratorComponent.FlagCombinationEntry>());
+            }
+        }
+
+        /// <summary>
+        ///     One manifest: each channel beside its bit, then its combinations. Editable in place for the
+        ///     project's and embedded or local packages' manifests, greyed out for the rest. Returns whether
+        ///     anything changed.
+        /// </summary>
+        private bool DrawChannelSource(LogChannelSource source)
+        {
+            var manifest = source.Manifest;
+            var hasDirection = LogChannelResolver.TryGetDirection(manifest, out var direction);
+            var segment = new FlagSegment(manifest.StartBit, direction, manifest.Channels);
+            var retiredIndex = -1;
+            var removedCombinationIndex = -1;
+            var changed = false;
+
+            EditorGUILayout.BeginVertical("box");
+            GUILayout.Label(source.IsDirty ? $"{source.Owner} (unsaved)" : source.Owner, EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(source.DisplayPath, EditorStyles.miniLabel);
+            EditorGUILayout.LabelField(DescribeLayout(source, hasDirection, direction), EditorStyles.miniLabel);
+
+            EditorGUI.BeginDisabledGroup(!source.IsEditable);
+            EditorGUI.BeginChangeCheck();
+
+            for (var i = 0; i < manifest.Channels.Count; i++)
+            {
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField(hasDirection ? $"Bit {segment.BitAt(i)}" : "Bit ?", GUILayout.Width(60));
+
+                if (string.IsNullOrWhiteSpace(manifest.Channels[i]))
+                {
+                    EditorGUILayout.LabelField("(retired)", EditorStyles.miniLabel);
+                }
+                else
+                {
+                    manifest.Channels[i] = EditorGUILayout.TextField(manifest.Channels[i]);
+                    if (source.IsEditable && GUILayout.Button("Retire", GUILayout.Width(60)))
+                    {
+                        retiredIndex = i;
+                    }
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (manifest.Combinations.Count > 0)
+            {
+                EditorGUILayout.Space(2);
+                EditorGUILayout.LabelField("Combinations", EditorStyles.miniBoldLabel);
+            }
+
+            for (var i = 0; i < manifest.Combinations.Count; i++)
+            {
+                var combination = manifest.Combinations[i];
+                EditorGUILayout.BeginHorizontal();
+                combination.Name = EditorGUILayout.TextField(combination.Name, GUILayout.Width(140));
+
+                var flags = string.Join(", ", combination.Flags);
+                var editedFlags = EditorGUILayout.TextField(flags);
+                if (editedFlags != flags)
+                {
+                    //Split without dropping blanks, so the comma typed before the next name survives the redraw.
+                    combination.Flags = editedFlags.Split(',').Select(flag => flag.Trim()).ToList();
+                }
+
+                if (source.IsEditable && GUILayout.Button("Remove", GUILayout.Width(60)))
+                {
+                    removedCombinationIndex = i;
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            changed |= EditorGUI.EndChangeCheck();
+            EditorGUI.EndDisabledGroup();
+
+            if (source.IsEditable)
+            {
+                EditorGUILayout.BeginHorizontal();
+                _newChannelNames.TryGetValue(source, out var newChannelName);
+                newChannelName = EditorGUILayout.TextField(newChannelName ?? string.Empty);
+                _newChannelNames[source] = newChannelName;
+
+                if (GUILayout.Button("Add Channel", GUILayout.Width(100)) && !string.IsNullOrWhiteSpace(newChannelName))
+                {
+                    manifest.Channels.Add(newChannelName.Trim());
+                    _newChannelNames[source] = string.Empty;
+                    GUI.FocusControl(null);
+                    changed = true;
+                }
+
+                if (GUILayout.Button("Add Combination", GUILayout.Width(120)))
+                {
+                    manifest.Combinations.Add(new EnumGeneratorComponent.FlagCombinationEntry());
+                    changed = true;
+                }
+
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (retiredIndex >= 0)
+            {
+                //Emptied rather than removed, so every channel after it keeps its bit.
+                manifest.Channels[retiredIndex] = string.Empty;
+                changed = true;
+            }
+
+            if (removedCombinationIndex >= 0)
+            {
+                manifest.Combinations.RemoveAt(removedCombinationIndex);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                source.IsDirty = true;
+            }
+
+            EditorGUILayout.EndVertical();
+            return changed;
+        }
+
+        private static string DescribeLayout(LogChannelSource source, bool hasDirection, SegmentDirection direction)
+        {
+            var manifest = source.Manifest;
+            var access = source.IsEditable ? "editable" : "read-only";
+
+            if (!hasDirection)
+            {
+                return $"Direction '{manifest.Direction}' is neither Up nor Down ({access})";
+            }
+
+            if (direction == SegmentDirection.Down)
+            {
+                return $"Counts down from bit {manifest.StartBit} ({access})";
+            }
+
+            return manifest.Capacity > 0
+                ? $"Counts up from bit {manifest.StartBit}, reserving bits {manifest.StartBit} to "
+                  + $"{manifest.StartBit + manifest.Capacity - 1} ({access})"
+                : $"Counts up from bit {manifest.StartBit} ({access})";
         }
 
 

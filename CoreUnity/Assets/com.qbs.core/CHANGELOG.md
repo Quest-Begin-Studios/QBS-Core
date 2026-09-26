@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Log channel manifests.** A package declares the channels it needs in `<package>/Editor/LogChannels.json`, and `LogChannel` is generated from every manifest in the project instead of one hand-kept list. Each manifest pins its channels to bits (`StartBit`, `Direction`, then `Channels` in order), so a package's channels land on the same bits in every project whatever order packages were installed in. See the README's *Log Channel Manifests* section.
+- The Log Source Compiler lists every manifest: greyed out for packages installed from a registry, git or a tarball, editable for the project's own and for embedded or local packages. It can add a manifest to any editable package or the project, laying it out once when it is created: a package's counts up from past every other upward manifest's reserved bits and reserves 8, the project's counts down from bit 62.
+- `FlagSegment` and a matching `EnumGenParams` constructor and `EnumGeneratorComponent.ConfigureFlagSegments`, which lay a flags enum's base values out from fixed bits instead of by position. A blank key keeps its bit without emitting a member, and two segments may share a flag on the same bit.
+- When `Log.dll` exists but lacks a manifest's channels, or the manifests clash, a console warning on load says so. Only a missing DLL is still rebuilt automatically.
+
+### Changed
+
+- **Core's default channels moved into its own manifest**, `Editor/LogChannels.json`, on the same bits 0–9 as before and reserving 0–15. `LogChannelDefaults` is removed.
+- Generation stops on any clash (two channels on one bit, one channel on two bits, combinations defined differently) rather than moving a channel code may have been compiled against.
+- Retiring a channel in the window empties its entry instead of deleting it, so no later channel changes bit.
+- A project whose compiled `LogChannel` has channels no manifest declares has them moved into `Assets/Editor/LogChannels.json`, counting down from bit 62, the first time the window is opened. After the DLL is regenerated, the editor's saved channel mask and `RuntimeLogSettings.enabledChannels` are carried over by name, so each channel keeps its on/off state at its new bit; channels new to the layout start enabled. `GenerateLogDLLsHeadless` refuses to run until that move has been made, rather than drop those channels.
+
 ## [1.3.0] - 2026-09-21
 
 ### Added

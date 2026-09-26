@@ -13,6 +13,7 @@ namespace QBS.Core.Editor
         private EnumAttributeFlags _attributes = EnumAttributeFlags.None;
         private BackingType _backingType = BackingType.Int;
         private EnumTypeOption _enumType = EnumTypeOption.Simple;
+        private List<FlagSegment> _flagSegments;
 
 
         private ReorderableList _enumKeysList;
@@ -80,7 +81,7 @@ namespace QBS.Core.Editor
             if (flagCombinations != null)
             {
                 //Copied, not shared: the entries are mutable and the window edits them in place, which
-                //would otherwise write straight into the caller's list — LogChannelDefaults, as a rule.
+                //would otherwise write straight into the caller's list — a Log channel manifest, as a rule.
                 FlagCombinations.Clear();
                 foreach (var entry in flagCombinations)
                 {
@@ -96,15 +97,25 @@ namespace QBS.Core.Editor
         }
 
         /// <summary>
+        ///     Pins a Flags enum's base values to bits, laid out by segment, in place of numbering
+        ///     <see cref="EnumKeys" /> by position; <see cref="GenerateEnum" /> then ignores <see cref="EnumKeys" />.
+        ///     Pass <c>null</c> to go back to positional keys.
+        /// </summary>
+        public void ConfigureFlagSegments(List<FlagSegment> flagSegments)
+        {
+            _flagSegments = flagSegments == null ? null : new List<FlagSegment>(flagSegments);
+        }
+
+        /// <summary>
         ///     Every member name the next <see cref="GenerateEnum" /> emits, in the order it assigns their
-        ///     values: the configured keys, then the flag combinations. Helper generation reads this, so a
-        ///     caller cannot hand the writers a list the enum itself disagrees with — a blank or repeated
-        ///     row in the window is dropped from both or from neither.
+        ///     values: the configured keys (or the segments' flags, in bit order), then the flag combinations.
+        ///     Helper generation reads this, so a caller cannot hand the writers a list the enum itself
+        ///     disagrees with — a blank or repeated row in the window is dropped from both or from neither.
         ///     Meaningless for <see cref="EnumTypeOption.CustomValues" />, which names its members itself.
         /// </summary>
         public List<string> GetGeneratedKeyNames()
         {
-            var names = new List<string>(ParseEnumKeys());
+            var names = UsesFlagSegments() ? GetSegmentKeyNames() : new List<string>(ParseEnumKeys());
 
             var combinations = ParseFlagCombinations();
             if (combinations != null)
@@ -332,11 +343,36 @@ namespace QBS.Core.Editor
                     flagCombinations = ParseFlagCombinations();
                 }
 
-                genParams = new EnumGenParams<T>(_enumName, _attributes, baseKeys, _namespace, flagCombinations);
+                genParams = UsesFlagSegments()
+                    ? new EnumGenParams<T>(_enumName, _attributes, _flagSegments, _namespace, flagCombinations)
+                    : new EnumGenParams<T>(_enumName, _attributes, baseKeys, _namespace, flagCombinations);
             }
 
             using var generator = new EnumSourceGenerator();
             return generator.CreateEnumSource(genParams);
+        }
+
+        private bool UsesFlagSegments()
+        {
+            return _flagSegments != null && _enumType == EnumTypeOption.Flags;
+        }
+
+        private List<string> GetSegmentKeyNames()
+        {
+            var flagsByBit = new SortedDictionary<int, string>();
+
+            foreach (var segment in _flagSegments)
+            {
+                for (var i = 0; i < segment.Keys.Count; i++)
+                {
+                    if (!string.IsNullOrWhiteSpace(segment.Keys[i]))
+                    {
+                        flagsByBit[segment.BitAt(i)] = segment.Keys[i];
+                    }
+                }
+            }
+
+            return new List<string>(flagsByBit.Values);
         }
 
         private HashSet<string> ParseEnumKeys()

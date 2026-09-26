@@ -70,6 +70,10 @@ namespace QBS.Core.Editor
 			{
 				WriteEnumWithCustomKeys(genParams.EnumKeysAndCustomValues);
 			}
+			else if (genParams.FlagSegments != null)
+			{
+				WriteSegmentedFlagsEnum(genParams.FlagSegments, genParams.FlagCombinations);
+			}
 			else if((genParams.Attributes & EnumAttributeFlags.Flags) == EnumAttributeFlags.Flags)
 			{
 				WriteFlagsEnum(genParams.BaseEnumKeys, genParams.FlagCombinations);
@@ -114,6 +118,36 @@ namespace QBS.Core.Editor
 				index++;
 			}
 
+			WriteFlagCombinations(flagCombinations);
+		}
+
+		private void WriteSegmentedFlagsEnum(IReadOnlyList<FlagSegment> flagSegments, Dictionary<string, HashSet<string>> flagCombinations)
+		{
+			_indentedWriter.WriteLine(EnumFlagsNothing);
+
+			// Written in bit order whichever way each segment counts, a shared flag once and a retired one not at all
+			var flagsByBit = new SortedDictionary<int, string>();
+			foreach (var segment in flagSegments)
+			{
+				for (var i = 0; i < segment.Keys.Count; i++)
+				{
+					if (!string.IsNullOrWhiteSpace(segment.Keys[i]))
+					{
+						flagsByBit[segment.BitAt(i)] = segment.Keys[i];
+					}
+				}
+			}
+
+			foreach (var (bit, flag) in flagsByBit)
+			{
+				_indentedWriter.WriteLine(EnumKeyValueTemplate, flag, (1L << bit).ToString());
+			}
+
+			WriteFlagCombinations(flagCombinations);
+		}
+
+		private void WriteFlagCombinations(Dictionary<string, HashSet<string>> flagCombinations)
+		{
 			//if no composite flags exist, just write the "All = ~None" entry and exit	
 			if (flagCombinations == null)
 			{

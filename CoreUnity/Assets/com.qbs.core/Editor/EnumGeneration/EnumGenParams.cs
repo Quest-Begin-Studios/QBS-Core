@@ -16,7 +16,9 @@ namespace QBS.Core.Editor
 		public HashSet<string> BaseEnumKeys { get; }
 		// Flag Combinations
 		public Dictionary<string, HashSet<string>> FlagCombinations { get; }
-		
+		// Flags pinned to bits instead of numbered by position; BaseEnumKeys then holds their names
+		public IReadOnlyList<FlagSegment> FlagSegments { get; }
+
 		// Collection for generic enum with custom values; cannot support Flags
 		public Dictionary<string, T> EnumKeysAndCustomValues { get; }
 
@@ -97,6 +99,99 @@ namespace QBS.Core.Editor
 		}
 
 		
+		/// <summary>
+		///     Initializes a new instance of the <see cref="EnumGenParams{T}" /> struct for a flags enum whose base
+		///     values sit on fixed bits, laid out by <paramref name="flagSegments" /> rather than by position.
+		/// </summary>
+		/// <param name="enumName">The name of the enum to generate.</param>
+		/// <param name="attributes">The attributes to apply to the enum. Must include Flags.</param>
+		/// <param name="flagSegments">
+		///     The runs of base flags and the bits they start from. Two segments may name the same flag on the
+		///     same bit, which is then written once.
+		/// </param>
+		/// <param name="namespace">The namespace the enum needs to be in.</param>
+		/// <param name="flagCombinations">
+		///     Optional dictionary mapping combination flag names to sets of base flag names they combine.
+		/// </param>
+		/// <exception cref="ArgumentException">
+		///     Thrown when Flags is not set, when the backing type is not an integral type, when a flag lands
+		///     outside the backing type or on a bit another flag holds, or when a flag combination references
+		///     a non-existent value.
+		/// </exception>
+		public EnumGenParams(string enumName, EnumAttributeFlags attributes, IReadOnlyList<FlagSegment> flagSegments,
+			string @namespace = null, Dictionary<string, HashSet<string>> flagCombinations = null) : this()
+		{
+			if (!attributes.HasFlag(EnumAttributeFlags.Flags))
+			{
+				throw new ArgumentException("Flag segments are only supported for Enums with the Flags attribute");
+			}
+
+			EnumName = enumName;
+			Namespace = @namespace;
+			BackingType = typeof(T);
+			EnumHasCustomValues = false;
+
+			Attributes = attributes;
+			FlagSegments = flagSegments;
+			BaseEnumKeys = new HashSet<string>();
+			FlagCombinations = flagCombinations;
+
+			if (!ValidateType())
+			{
+				throw new ArgumentException("Value must be of a integral type");
+			}
+
+			ValidateFlagSegments();
+			ValidateFlagCombinations();
+		}
+
+		private void ValidateFlagSegments()
+		{
+			// Same reasoning as ValidateEnumSize: the top bit of a signed backing field is its sign.
+			var highestBit = (Marshal.SizeOf<T>() * 8) - 2;
+			var flagsByBit = new Dictionary<int, string>();
+			var bitsByFlag = new Dictionary<string, int>();
+
+			foreach (var segment in FlagSegments)
+			{
+				for (var i = 0; i < segment.Keys.Count; i++)
+				{
+					var key = segment.Keys[i];
+					var isRetired = string.IsNullOrWhiteSpace(key);
+					var label = isRetired ? "A retired flag" : key;
+					var bit = segment.BitAt(i);
+
+					if (bit < 0 || bit > highestBit)
+					{
+						throw new ArgumentException($"{label} lands on bit {bit}, outside the 0 to {highestBit} the backing type has room for");
+					}
+
+					if (!isRetired && bitsByFlag.TryGetValue(key, out var existingBit))
+					{
+						// The same flag on the same bit is shared; on two bits the segments contradict each other.
+						if (existingBit != bit)
+						{
+							throw new ArgumentException($"{key} is placed on both bit {existingBit} and bit {bit}");
+						}
+
+						continue;
+					}
+
+					if (flagsByBit.TryGetValue(bit, out var existingFlag))
+					{
+						throw new ArgumentException($"{label} and {existingFlag} both claim bit {bit}");
+					}
+
+					flagsByBit[bit] = label;
+					if (!isRetired)
+					{
+						bitsByFlag[key] = bit;
+						BaseEnumKeys.Add(key);
+					}
+				}
+			}
+		}
+
 		private void ValidateEnumSize()
 		{
 			// We're subtracting -1 because if the backing field is signed,
