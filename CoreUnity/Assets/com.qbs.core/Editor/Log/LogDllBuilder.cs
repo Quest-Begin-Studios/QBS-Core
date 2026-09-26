@@ -21,7 +21,7 @@ namespace QBS.Core.Editor
     /// </remarks>
     public static class LogDllBuilder
     {
-        private const string MenuPath = "Tools/QBS/Logs/Build Log DLLs";
+        private const string MenuPath = "Tools/Logs/Build Log DLLs";
         private const string AssemblyReferencesJson = "AssemblyReferences.json";
         private const string DllName = "Log";
         private const string EditorAssemblyName = "QBS.Editor";

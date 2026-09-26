@@ -42,7 +42,7 @@ A channel is a `LogCategory` with a dot-separated name. Core ships `Log.dll` and
 - **Package and game channels**: `static readonly` fields of a `[LogCategories]` class, named after the owner's namespace (`Acme.Inventory.Save`) so names never collide
 - **Groups**: `LogCategory.Group(name, members…)`. You log to a group like a channel; it is on while any member is
 - **Rules**: `LogRules` switches a name and everything under it; the longest matching rule wins. Level filtering stays global (`Log.MinimumLevel`)
-- **Configuration**: `Tools > QBS > Logs > Configure Logging`, with **Validate** to report undeclared categories and names that fall under a built-in channel's
+- **Configuration**: `Tools > Logs > Configure Logging`, which also reports undeclared categories and names that fall under a built-in channel's
 
 ### 🔨 DLL Generation
 
@@ -125,7 +125,7 @@ LogRules.Set("Acme.Inventory.Save", true);            // ...except Save
 Log.SetChannelEnabled(LogChannel.Core, false);        // Input and Gameplay off
 ```
 
-Core's own repository rebuilds the DLLs from `RawSource~` with `Tools > QBS > Logs > Build Log DLLs` after changing the log sources. Projects that install the package never do.
+Core's own repository rebuilds the DLLs from `RawSource~` with `Tools > Logs > Build Log DLLs` after changing the log sources. Projects that install the package never do.
 
 ### DLL Generation (Programmatic)
 

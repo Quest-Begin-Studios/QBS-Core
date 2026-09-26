@@ -6,7 +6,7 @@ namespace QBS.Core.Editor
 {
 	public static class LogEditorMenu
 	{
-		private const string MenuRoot = "Tools/QBS/Logs/";
+		private const string MenuRoot = "Tools/Logs/";
 		private const string ConfigureMenu = MenuRoot + "Configure Logging";
 
 		[MenuItem(ConfigureMenu, false, 1)]
@@ -51,9 +51,9 @@ namespace QBS.Core.Editor
 
 			Debug.LogError
 			(
-				"QBS Logging is disabled. Enable it in the "
+				"Logging is disabled. Enable it in the "
 				+ "Log Configuration window to utilize the logging utility."
-				+ " \nTools -> QBS -> Logging -> Configure Logging "
+				+ " \nTools -> Logs -> Configure Logging "
 			);
 
 			EditorPrefs.SetBool(LogEditorConstants.LogsDisabledWarningShown, true);

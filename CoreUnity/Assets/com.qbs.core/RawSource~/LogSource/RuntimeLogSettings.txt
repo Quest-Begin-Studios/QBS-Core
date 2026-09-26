@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace QBS.Core
 {
-	[CreateAssetMenu(fileName = "RuntimeLogSettings", menuName = "QBS/Runtime Log Settings")]
+	[CreateAssetMenu(fileName = "RuntimeLogSettings", menuName = "Logs/Runtime Log Settings")]
 	public class RuntimeLogSettings : ScriptableObject
 	{
 		[SerializeField]
@@ -13,7 +13,7 @@ namespace QBS.Core
 		//Rules by name: nothing here depends on which categories exist or the order they were created in, and a
 		//rule for a package that has since been removed simply matches nothing.
 		[SerializeField]
-		[Tooltip("Which log channels are on, as prefix rules. Edit from Tools > QBS > Logs > Configure Logging.")]
+		[Tooltip("Which log channels are on, as prefix rules. Edit from Tools > Logs > Configure Logging.")]
 		private List<LogRule> rules = new() { new LogRule(LogRules.Root, true) };
 
 		public LogLevel MinimumLevel

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEngine;
 
@@ -8,32 +9,51 @@ namespace QBS.Core.Editor
 {
 	public class LogConfigWindow : EditorWindow
 	{
-		private const int MaxChannelsPerRow = 5;
+		private const string BuiltInSection = "Built-in";
+		private const string GroupsSection = "Groups";
+		private const float PillHeight = 22f;
+		private const float PillSpacing = 4f;
+		private const float PillPadding = 20f;
+		private const float LevelLabelWidth = 96f;
+
+		//Card padding and margins plus room for the vertical scrollbar.
+		private const float ContentInset = 48f;
+
+		private static readonly string[] LevelNames = Enum.GetNames(typeof(LogLevel));
 
 		private bool _logsEnabled;
 		private LogLevel _minimumLevel;
 		private RuntimeLogSettings _runtimeSettings;
 
-		private GUIStyle _headerStyle;
-		private GUIStyle _sectionStyle;
-		private GUIStyle _boxStyle;
 		private Vector2 _channelScrollPosition;
 		private Vector2 _windowScrollPosition;
 		private List<LogCategory> _individualChannels;
 		private List<LogCategory> _compositeChannels;
+		private List<(string Name, List<LogCategory> Channels)> _sections;
 		private HashSet<LogCategory> _editorOnlyChannels;
 		private List<string> _problems;
 		private string _search = "";
+		private readonly HashSet<string> _collapsedSections = new();
+
+		private Texture2D _cardTexture;
+		private GUIStyle _titleStyle;
+		private GUIStyle _cardStyle;
+		private GUIStyle _sectionFoldoutStyle;
+		private GUIStyle _countStyle;
+		private GUIStyle _subtleStyle;
+		private GUIStyle _pillLabelStyle;
 
 		public static void ShowWindow()
 		{
 			var window = GetWindow<LogConfigWindow>("Log Configuration");
-			window.minSize = new Vector2(450, 820);
+			window.minSize = new Vector2(420, 480);
 			window.Show();
 		}
 
 		private void OnEnable()
 		{
+			wantsMouseMove = true;
+
 			// Load or create RuntimeLogSettings
 			_runtimeSettings = LogEditorUtility.LoadOrCreateRuntimeSettings();
 
@@ -53,26 +73,60 @@ namespace QBS.Core.Editor
 			RefreshChannels();
 		}
 
+		private void OnDisable()
+		{
+			if (_cardTexture != null)
+			{
+				DestroyImmediate(_cardTexture);
+			}
+		}
+
 		private void InitializeStyles()
 		{
-			_headerStyle ??= new GUIStyle(EditorStyles.largeLabel)
+			//The texture goes with the window on a domain reload while the styles can survive, so check both.
+			if (_cardStyle != null && _cardTexture != null)
 			{
-				fontSize = 18,
+				return;
+			}
+
+			_cardTexture = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
+			_cardTexture.SetPixel(0, 0, Palette.Card);
+			_cardTexture.Apply();
+
+			_titleStyle = new GUIStyle(EditorStyles.boldLabel)
+			{
+				fontSize = 16,
+				fixedHeight = PillHeight,
+				alignment = TextAnchor.MiddleLeft,
+			};
+
+			_cardStyle = new GUIStyle
+			{
+				normal = { background = _cardTexture },
+				padding = new RectOffset(10, 10, 8, 10),
+				margin = new RectOffset(6, 6, 4, 4),
+			};
+
+			_sectionFoldoutStyle = new GUIStyle(EditorStyles.foldout)
+			{
 				fontStyle = FontStyle.Bold,
+			};
+
+			_countStyle = new GUIStyle(EditorStyles.miniLabel)
+			{
+				alignment = TextAnchor.MiddleRight,
+			};
+
+			_subtleStyle = new GUIStyle(EditorStyles.miniLabel)
+			{
+				wordWrap = true,
+			};
+
+			_pillLabelStyle = new GUIStyle(EditorStyles.label)
+			{
 				alignment = TextAnchor.MiddleCenter,
-				margin = new RectOffset(0, 0, 10, 10),
-			};
-
-			_sectionStyle ??= new GUIStyle(EditorStyles.boldLabel)
-			{
-				fontSize = 13,
-				margin = new RectOffset(5, 0, 5, 5),
-			};
-
-			_boxStyle ??= new GUIStyle(GUI.skin.box)
-			{
-				padding = new RectOffset(10, 10, 10, 10),
-				margin = new RectOffset(5, 5, 5, 5),
+				fontSize = 11,
+				clipping = TextClipping.Clip,
 			};
 		}
 
@@ -80,200 +134,345 @@ namespace QBS.Core.Editor
 		{
 			InitializeStyles();
 
+			if (Event.current.type == EventType.MouseMove)
+			{
+				Repaint();
+			}
+
 			_windowScrollPosition = EditorGUILayout.BeginScrollView(_windowScrollPosition);
 
-			EditorGUILayout.Space(15);
-			EditorGUILayout.LabelField("QBS Log Configuration", _headerStyle);
-			DrawSeparator();
-			EditorGUILayout.Space(10);
-
-			DrawEnableLogsSection();
-			EditorGUILayout.Space(15);
-			DrawMinimumLevelSection();
-			EditorGUILayout.Space(15);
+			GUILayout.Space(4);
+			DrawHeader();
+			DrawToolbar();
 			DrawChannelsSection();
-			EditorGUILayout.Space(15);
+			DrawCompositeChannels();
 			DrawValidationSection();
-			EditorGUILayout.Space(10);
+			GUILayout.Space(6);
 
 			EditorGUILayout.EndScrollView();
 		}
 
-		private void DrawSeparator()
+		private void DrawHeader()
 		{
-			var rect = EditorGUILayout.GetControlRect(false, 1);
-			EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 0.5f));
-		}
+			EditorGUILayout.BeginVertical(_cardStyle);
 
-		private void DrawEnableLogsSection()
-		{
-			EditorGUILayout.BeginVertical(_boxStyle);
+			EditorGUILayout.BeginHorizontal();
+			GUILayout.Label("QBS Logging", _titleStyle);
+			GUILayout.FlexibleSpace();
+			DrawEnableLogsToggle();
+			EditorGUILayout.EndHorizontal();
 
-			EditorGUILayout.LabelField("⚙ Enable Logs", _sectionStyle);
-			EditorGUILayout.Space(3);
+			GUILayout.Space(8);
+			DrawMinimumLevelSection();
 
-			EditorGUILayout.HelpBox
-			(
-				"Toggle the ENABLE_LOGS scripting define symbol. Logs are compiled out when disabled.",
-				MessageType.Info
-			);
-
-			if (EditorApplication.isCompiling)
+			GUILayout.Space(6);
+			var activeCount = _individualChannels.Count(Log.IsChannelEnabled);
+			var summary = $"{activeCount} of {_individualChannels.Count} channels on";
+			if (_problems.Count > 0)
 			{
-				EditorGUILayout.Space(5);
+				summary += $"  ·  {_problems.Count} issue{(_problems.Count == 1 ? "" : "s")} below";
+			}
+			GUILayout.Label(summary, _subtleStyle);
+
+			if (!_logsEnabled)
+			{
+				GUILayout.Space(4);
 				EditorGUILayout.HelpBox
 				(
-					"⏳ Scripts are compiling...",
+					"ENABLE_LOGS is off for this build target, so Trace to Warning calls are compiled out. Error and Fatal still log.",
 					MessageType.Warning
 				);
 			}
 
-			EditorGUILayout.Space(5);
-			EditorGUILayout.BeginHorizontal();
-			GUILayout.FlexibleSpace();
+			EditorGUILayout.EndVertical();
+		}
 
-			var toggleColor = _logsEnabled ? new Color(0.3f, 0.8f, 0.3f) : new Color(0.8f, 0.3f, 0.3f);
-			var originalColor = GUI.backgroundColor;
-			GUI.backgroundColor = toggleColor;
+		private void DrawEnableLogsToggle()
+		{
+			var isCompiling = EditorApplication.isCompiling;
+			var text = isCompiling ? "Compiling…" : _logsEnabled ? "● Logs on" : "○ Logs off";
+			var content = new GUIContent(text, "Adds or removes the ENABLE_LOGS scripting define symbol for the selected build target.");
 
-			EditorGUI.BeginDisabledGroup(EditorApplication.isCompiling);
-			var newLogsEnabled = GUILayout.Toggle
-			(
-				_logsEnabled,
-				_logsEnabled ? "✓ Enabled" : "✗ Disabled",
-				GUI.skin.button,
-				GUILayout.Width(120),
-				GUILayout.Height(30)
-			);
-			EditorGUI.EndDisabledGroup();
-
-			GUI.backgroundColor = originalColor;
-
-			if (newLogsEnabled != _logsEnabled)
+			EditorGUI.BeginDisabledGroup(isCompiling);
+			if (Pill(content, _logsEnabled ? Palette.On : Palette.Danger, false, 104f))
 			{
-				_logsEnabled = newLogsEnabled;
+				_logsEnabled = !_logsEnabled;
 				ToggleEnableLogs();
 			}
-
-			GUILayout.FlexibleSpace();
-			EditorGUILayout.EndHorizontal();
-			EditorGUILayout.Space(5);
-
-			EditorGUILayout.EndVertical();
+			EditorGUI.EndDisabledGroup();
 		}
 
 		private void DrawMinimumLevelSection()
 		{
-			EditorGUILayout.BeginVertical(_boxStyle);
-
-			EditorGUILayout.LabelField("📊 Minimum Log Level", _sectionStyle);
-			EditorGUILayout.Space(3);
-
-			EditorGUILayout.HelpBox("Only logs at or above this level will be displayed.", MessageType.Info);
-
-			EditorGUILayout.Space(5);
 			EditorGUILayout.BeginHorizontal();
-			EditorGUILayout.LabelField("Current Level:", GUILayout.Width(100));
+			GUILayout.Label(new GUIContent("Minimum level", "Only logs at or above this level are shown."), GUILayout.Width(LevelLabelWidth), GUILayout.Height(PillHeight));
 
-			var levelColor = GetLevelColor(_minimumLevel);
-			var originalColor = GUI.backgroundColor;
-			GUI.backgroundColor = levelColor;
+			var available = position.width - ContentInset - LevelLabelWidth;
+			var width = Mathf.Max(40f, (available - PillSpacing * (LevelNames.Length - 1)) / LevelNames.Length);
 
-			var newLevel = (LogLevel)EditorGUILayout.EnumPopup(_minimumLevel);
-
-			GUI.backgroundColor = originalColor;
-
-			if (newLevel != _minimumLevel)
+			for (var i = 0; i < LevelNames.Length; i++)
 			{
-				_minimumLevel = newLevel;
-				WriteMinimumLevel(newLevel);
+				var level = (LogLevel)i;
+				var levelColor = GetLevelColor(level);
+				var fill = level == _minimumLevel ? levelColor
+					: level > _minimumLevel ? Color.Lerp(Palette.Off, levelColor, 0.35f)
+					: Palette.Off;
+
+				var content = new GUIContent(LevelNames[i], $"Show {LevelNames[i]} and above.");
+				if (Pill(content, fill, false, width) && level != _minimumLevel)
+				{
+					_minimumLevel = level;
+					WriteMinimumLevel(level);
+				}
+
+				if (i < LevelNames.Length - 1)
+				{
+					GUILayout.Space(PillSpacing);
+				}
 			}
+
 			EditorGUILayout.EndHorizontal();
-			EditorGUILayout.EndVertical();
 		}
 
-		private void DrawChannelsSection()
+		private void DrawToolbar()
 		{
-			EditorGUILayout.BeginVertical(_boxStyle);
+			EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
+			GUILayout.Space(4);
+			_search = GUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.ExpandWidth(true));
 
-			EditorGUILayout.LabelField("📡 Log Channels", _sectionStyle);
-			EditorGUILayout.Space(3);
-
-			EditorGUILayout.HelpBox
-			(
-				"Enable or disable specific log channels. Disabled channels will not output logs.",
-				MessageType.Info
-			);
-
-			EditorGUILayout.Space(5);
-			EditorGUILayout.BeginHorizontal();
-			if (GUILayout.Button("✓ Enable All", GUILayout.Height(25)))
+			if (GUILayout.Button(new GUIContent("All on", "Switches every channel on."), EditorStyles.toolbarButton, GUILayout.Width(56)))
 			{
 				SetStateOfAllChannels(true);
 			}
-			if (GUILayout.Button("✗ Disable All", GUILayout.Height(25)))
+			if (GUILayout.Button(new GUIContent("All off", "Switches every channel off."), EditorStyles.toolbarButton, GUILayout.Width(56)))
 			{
 				SetStateOfAllChannels(false);
 			}
 			EditorGUILayout.EndHorizontal();
+			GUILayout.Space(2);
+		}
 
-			EditorGUILayout.Space(5);
-			_search = EditorGUILayout.TextField("Search", _search);
+		private void DrawChannelsSection()
+		{
+			foreach (var (sectionName, channels) in _sections)
+			{
+				var visibleChannels = channels.Where(MatchesSearch).ToList();
+				if (visibleChannels.Count == 0)
+				{
+					continue;
+				}
 
-			EditorGUILayout.Space(8);
-			EditorGUILayout.LabelField("Individual Channels:", EditorStyles.boldLabel);
-			EditorGUILayout.Space(3);
-			DrawIndividualChannels();
+				EditorGUILayout.BeginVertical(_cardStyle);
 
-			EditorGUILayout.Space(8);
-			EditorGUILayout.LabelField("Composite Channels:", EditorStyles.boldLabel);
-			EditorGUILayout.Space(3);
-			DrawCompositeChannels();
+				var activeCount = channels.Count(Log.IsChannelEnabled);
+				if (DrawSectionHeader(sectionName, $"{activeCount} / {channels.Count} on"))
+				{
+					GUILayout.Space(4);
+					DrawIndividualChannels(sectionName, visibleChannels);
+				}
 
-			EditorGUILayout.Space(8);
-			DrawSeparator();
-			EditorGUILayout.Space(5);
-			EditorGUILayout.LabelField("Active Channels:", EditorStyles.boldLabel);
-			EditorGUILayout.Space(3);
-			DrawActiveChannelsList();
-			EditorGUILayout.Space(5);
+				EditorGUILayout.EndVertical();
+			}
+		}
+
+		private void DrawIndividualChannels(string sectionName, List<LogCategory> channels)
+		{
+			var pills = channels.Select(channel => new PillItem
+			(
+				channel,
+				new GUIContent(GetShortName(sectionName, channel), GetRuleTooltip(channel)),
+				Log.IsChannelEnabled(channel) ? Palette.On : Palette.Off,
+				_editorOnlyChannels.Contains(channel)
+			));
+
+			DrawPillFlow(pills, channel =>
+			{
+				Log.SetChannelEnabled(channel, !Log.IsChannelEnabled(channel));
+				WriteRules();
+			});
+		}
+
+		private void DrawCompositeChannels()
+		{
+			var visibleGroups = _compositeChannels.Where(MatchesSearch).ToList();
+			if (visibleGroups.Count == 0)
+			{
+				return;
+			}
+
+			EditorGUILayout.BeginVertical(_cardStyle);
+
+			if (DrawSectionHeader(GroupsSection, $"{_compositeChannels.Count} groups"))
+			{
+				GUILayout.Space(4);
+
+				var pills = visibleGroups.Select(group =>
+				{
+					var activeCount = group.Members.Count(Log.IsChannelEnabled);
+					var fill = activeCount == group.Members.Count ? Palette.On
+						: activeCount > 0 ? Palette.Partial
+						: Palette.Off;
+
+					var tooltip = $"{group.Name}: {string.Join(", ", group.Members.Select(m => m.Name))}";
+					var content = new GUIContent($"{group.Name}  {activeCount}/{group.Members.Count}", tooltip);
+					return new PillItem(group, content, fill, _editorOnlyChannels.Contains(group));
+				});
+
+				//A group that is fully on switches off; any other state switches it fully on.
+				DrawPillFlow(pills, group =>
+				{
+					var isFullyEnabled = group.Members.All(Log.IsChannelEnabled);
+					Log.SetChannelEnabled(group, !isFullyEnabled);
+					WriteRules();
+				});
+
+				GUILayout.Space(4);
+				GUILayout.Label("Green: every member on. Amber: some on. Grey: none on.", _subtleStyle);
+			}
 
 			EditorGUILayout.EndVertical();
 		}
 
+		//Checked whenever the window is enabled, which includes after every recompile, so nothing needs a button.
 		private void DrawValidationSection()
 		{
-			EditorGUILayout.BeginVertical(_boxStyle);
-
-			EditorGUILayout.LabelField("🔎 Validation", _sectionStyle);
-			EditorGUILayout.Space(3);
-
-			EditorGUILayout.HelpBox
-			(
-				"Finds every [LogCategories] class and checks what it declares. Runs when this window opens.",
-				MessageType.Info
-			);
-
-			EditorGUILayout.Space(5);
-			if (GUILayout.Button("Validate", GUILayout.Height(25)))
-			{
-				RefreshChannels();
-			}
-
-			EditorGUILayout.Space(5);
 			if (_problems.Count == 0)
 			{
-				EditorGUILayout.HelpBox("No problems found.", MessageType.None);
+				return;
 			}
-			else
+
+			EditorGUILayout.BeginVertical(_cardStyle);
+
+			GUILayout.Label($"⚠ {_problems.Count} issue{(_problems.Count == 1 ? "" : "s")} with declared channels", EditorStyles.boldLabel);
+
+			foreach (var problem in _problems)
 			{
-				foreach (var problem in _problems)
-				{
-					EditorGUILayout.HelpBox(problem, MessageType.Warning);
-				}
+				EditorGUILayout.HelpBox(problem, MessageType.Warning);
 			}
 
 			EditorGUILayout.EndVertical();
+		}
+
+		/// <summary>A foldout with a count on the right. Returns whether the section is open.</summary>
+		private bool DrawSectionHeader(string sectionName, string count)
+		{
+			var rect = GUILayoutUtility.GetRect(0f, EditorGUIUtility.singleLineHeight, GUILayout.ExpandWidth(true));
+			const float countWidth = 90f;
+
+			var isOpen = !_collapsedSections.Contains(sectionName);
+			var foldoutRect = new Rect(rect.x, rect.y, rect.width - countWidth, rect.height);
+			var nowOpen = EditorGUI.Foldout(foldoutRect, isOpen, sectionName, true, _sectionFoldoutStyle);
+			GUI.Label(new Rect(rect.xMax - countWidth, rect.y, countWidth, rect.height), count, _countStyle);
+
+			if (nowOpen != isOpen)
+			{
+				if (nowOpen)
+				{
+					_collapsedSections.Remove(sectionName);
+				}
+				else
+				{
+					_collapsedSections.Add(sectionName);
+				}
+			}
+
+			//While searching, every section with a match stays open so the match is visible.
+			return nowOpen || _search.Length > 0;
+		}
+
+		private readonly struct PillItem
+		{
+			public readonly LogCategory Channel;
+			public readonly GUIContent Content;
+			public readonly Color Fill;
+			public readonly bool Italic;
+
+			public PillItem(LogCategory channel, GUIContent content, Color fill, bool italic)
+			{
+				Channel = channel;
+				Content = content;
+				Fill = fill;
+				Italic = italic;
+			}
+		}
+
+		//Lays pills out left to right, wrapping to a new row when the next one would overflow the card.
+		private void DrawPillFlow(IEnumerable<PillItem> pills, Action<LogCategory> onClick)
+		{
+			var available = position.width - ContentInset;
+			var rowWidth = 0f;
+			LogCategory clicked = null;
+
+			EditorGUILayout.BeginHorizontal();
+
+			foreach (var pill in pills)
+			{
+				_pillLabelStyle.fontStyle = pill.Italic ? FontStyle.Italic : FontStyle.Normal;
+				var width = Mathf.Max(56f, _pillLabelStyle.CalcSize(pill.Content).x + PillPadding);
+
+				if (rowWidth > 0f && rowWidth + width > available)
+				{
+					GUILayout.FlexibleSpace();
+					EditorGUILayout.EndHorizontal();
+					GUILayout.Space(PillSpacing);
+					EditorGUILayout.BeginHorizontal();
+					rowWidth = 0f;
+				}
+
+				if (Pill(pill.Content, pill.Fill, pill.Italic, width))
+				{
+					clicked = pill.Channel;
+				}
+
+				GUILayout.Space(PillSpacing);
+				rowWidth += width + PillSpacing;
+			}
+
+			GUILayout.FlexibleSpace();
+			EditorGUILayout.EndHorizontal();
+
+			//Applied after the loop, so the frame that handled the click drew every pill from the same state.
+			if (clicked != null)
+			{
+				onClick(clicked);
+			}
+		}
+
+		/// <summary>A flat, coloured button whose text contrasts with its fill. Returns true when clicked.</summary>
+		private bool Pill(GUIContent content, Color fill, bool italic, float width)
+		{
+			var rect = GUILayoutUtility.GetRect(width, PillHeight, GUILayout.Width(width), GUILayout.Height(PillHeight));
+
+			if (Event.current.type == EventType.Repaint)
+			{
+				var isHovered = GUI.enabled && rect.Contains(Event.current.mousePosition);
+				var shown = GUI.enabled ? fill : Color.Lerp(fill, Palette.Off, 0.6f);
+				EditorGUI.DrawRect(rect, isHovered ? Color.Lerp(shown, Color.white, 0.15f) : shown);
+			}
+
+			_pillLabelStyle.fontStyle = italic ? FontStyle.Italic : FontStyle.Normal;
+			_pillLabelStyle.normal.textColor = fill.grayscale > 0.6f ? new Color(0.12f, 0.12f, 0.12f) : Color.white;
+			GUI.Label(rect, content, _pillLabelStyle);
+
+			return GUI.Button(rect, GUIContent.none, GUIStyle.none);
+		}
+
+		private bool MatchesSearch(LogCategory channel)
+		{
+			return _search.Length == 0 || channel.Name.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		//Inside its section a channel drops the section's name: "Acme.Inventory.Save" shows as "Inventory.Save".
+		private static string GetShortName(string sectionName, LogCategory channel)
+		{
+			var prefix = sectionName + ".";
+			return channel.Name.StartsWith(prefix, StringComparison.Ordinal) ? channel.Name.Substring(prefix.Length) : channel.Name;
+		}
+
+		private static string GetFirstSegment(string name)
+		{
+			var dot = name.IndexOf('.');
+			return dot > 0 ? name.Substring(0, dot) : name;
 		}
 
 		private Color GetLevelColor(LogLevel level)
@@ -356,175 +555,22 @@ namespace QBS.Core.Editor
 			var all = LogCategory.All;
 			_individualChannels = all.Where(c => !c.IsGroup).OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
 			_compositeChannels = all.Where(c => c.IsGroup).OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
-		}
 
-		private void DrawActiveChannelsList()
-		{
-			var activeChannels = GetActiveChannels();
+			//Core's own channels get their own section; everyone else's are grouped by the first part of the name,
+			//which is their owner's namespace.
+			var builtIns = new HashSet<LogCategory>
+			(
+				typeof(LogChannel).GetFields(BindingFlags.Public | BindingFlags.Static)
+					.Select(field => field.GetValue(null))
+					.OfType<LogCategory>()
+			);
 
-			if (activeChannels.Count == 0)
-			{
-				var emptyBoxStyle = new GUIStyle(GUI.skin.box)
-				{
-					padding = new RectOffset(15, 15, 12, 12),
-					alignment = TextAnchor.MiddleCenter,
-				};
-
-				var originalBg = GUI.backgroundColor;
-				GUI.backgroundColor = new Color(0.8f, 0.4f, 0.2f, 0.3f);
-
-				EditorGUILayout.BeginVertical(emptyBoxStyle);
-				GUI.backgroundColor = originalBg;
-
-				var warningStyle = new GUIStyle(EditorStyles.boldLabel)
-				{
-					fontSize = 11,
-					normal = { textColor = new Color(1f, 0.7f, 0.4f) },
-					alignment = TextAnchor.MiddleCenter,
-				};
-				EditorGUILayout.LabelField("⚠ No channels are currently active", warningStyle);
-
-				EditorGUILayout.EndVertical();
-			}
-			else
-			{
-				var boxStyle = new GUIStyle(GUI.skin.box)
-				{
-					padding = new RectOffset(12, 12, 10, 10),
-				};
-
-				var originalBg = GUI.backgroundColor;
-				GUI.backgroundColor = new Color(0.2f, 0.4f, 0.3f, 0.4f);
-
-				EditorGUILayout.BeginVertical(boxStyle);
-				GUI.backgroundColor = originalBg;
-
-				var channelIndex = 0;
-
-				while (channelIndex < activeChannels.Count)
-				{
-					EditorGUILayout.BeginHorizontal();
-
-					for (var i = 0; i < MaxChannelsPerRow && channelIndex < activeChannels.Count; i++)
-					{
-						var channel = activeChannels[channelIndex];
-
-						var badgeStyle = new GUIStyle(GUI.skin.box)
-						{
-							padding = new RectOffset(10, 10, 5, 5),
-							margin = new RectOffset(2, 2, 2, 2),
-							fontSize = 11,
-							fontStyle = FontStyle.Bold,
-							alignment = TextAnchor.MiddleCenter,
-							normal = { textColor = new Color(0.9f, 0.9f, 0.9f) },
-						};
-
-						var badgeBg = GUI.backgroundColor;
-						GUI.backgroundColor = new Color(0.3f, 0.7f, 0.5f, 0.8f);
-
-						GUILayout.Label(channel.Name, badgeStyle);
-
-						GUI.backgroundColor = badgeBg;
-						channelIndex++;
-					}
-
-					EditorGUILayout.EndHorizontal();
-				}
-
-				EditorGUILayout.Space(5);
-
-				var rect = EditorGUILayout.GetControlRect(false, 1);
-				EditorGUI.DrawRect(rect, new Color(0.3f, 0.7f, 0.5f, 0.4f));
-
-				EditorGUILayout.Space(3);
-
-				var countStyle = new GUIStyle(EditorStyles.miniLabel)
-				{
-					alignment = TextAnchor.MiddleCenter,
-					fontSize = 10,
-					fontStyle = FontStyle.Bold,
-					normal = { textColor = new Color(0.6f, 0.9f, 0.7f) },
-				};
-
-				EditorGUILayout.LabelField
-				(
-					$"✓ {activeChannels.Count} of {_individualChannels.Count} channels active",
-					countStyle
-				);
-
-				EditorGUILayout.EndVertical();
-			}
-		}
-
-		private void DrawIndividualChannels()
-		{
-			const int toggleWidth = 180;
-			const int padding = 20;
-			var availableWidth = position.width - padding;
-			var columns = Mathf.Max(1, (int)(availableWidth / toggleWidth));
-
-			var visibleChannels = _individualChannels
-				.Where(c => _search.Length == 0 || c.Name.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0)
+			_sections = _individualChannels
+				.GroupBy(c => builtIns.Contains(c) ? BuiltInSection : GetFirstSegment(c.Name))
+				.OrderBy(g => g.Key == BuiltInSection ? 0 : 1)
+				.ThenBy(g => g.Key, StringComparer.Ordinal)
+				.Select(g => (g.Key, g.ToList()))
 				.ToList();
-
-			var channelIndex = 0;
-
-			while (channelIndex < visibleChannels.Count)
-			{
-				EditorGUILayout.BeginHorizontal();
-
-				for (var i = 0; i < columns && channelIndex < visibleChannels.Count; i++)
-				{
-					var channel = visibleChannels[channelIndex];
-					var isEnabled = Log.IsChannelEnabled(channel);
-					var label = new GUIContent(GetDisplayName(channel), GetRuleTooltip(channel));
-
-					var newEnabled = EditorGUILayout.ToggleLeft(label, isEnabled, GUILayout.Width(toggleWidth));
-					if (newEnabled != isEnabled)
-					{
-						Log.SetChannelEnabled(channel, newEnabled);
-						WriteRules();
-					}
-
-					channelIndex++;
-				}
-
-				EditorGUILayout.EndHorizontal();
-			}
-		}
-
-		private void DrawCompositeChannels()
-		{
-			EditorGUILayout.BeginHorizontal();
-
-			foreach (var group in _compositeChannels)
-			{
-				var buttonStyle = new GUIStyle(GUI.skin.button)
-				{
-					fontStyle = FontStyle.Bold,
-					padding = new RectOffset(10, 10, 6, 6),
-				};
-
-				var isFullyEnabled = group.Members.All(Log.IsChannelEnabled);
-				var originalBg = GUI.backgroundColor;
-				GUI.backgroundColor = isFullyEnabled ? new Color(0.3f, 0.7f, 0.5f) : new Color(0.5f, 0.5f, 0.5f);
-
-				var label = new GUIContent(group.Name, string.Join(", ", group.Members.Select(m => m.Name)));
-				if (GUILayout.Button(label, buttonStyle, GUILayout.Height(28)))
-				{
-					Log.SetChannelEnabled(group, !isFullyEnabled);
-					WriteRules();
-				}
-
-				GUI.backgroundColor = originalBg;
-			}
-
-			EditorGUILayout.EndHorizontal();
-		}
-
-		private string GetDisplayName(LogCategory channel)
-		{
-			return _editorOnlyChannels.Contains(channel) ? channel.Name + " (editor)" : channel.Name;
 		}
 
 		private static string GetRuleTooltip(LogCategory channel)
@@ -542,22 +588,6 @@ namespace QBS.Core.Editor
 				: $"{channel.Name}: {state}, following '{rule.Prefix}'";
 		}
 
-		private List<LogCategory> GetActiveChannels()
-		{
-			var activeChannels = new List<LogCategory>();
-
-			for (var i = 0; i < _individualChannels.Count; i++)
-			{
-				var channel = _individualChannels[i];
-				if (Log.IsChannelEnabled(channel))
-				{
-					activeChannels.Add(channel);
-				}
-			}
-
-			return activeChannels;
-		}
-
 		private void SyncRuntimeSettingsFromEditorPrefs()
 		{
 			if (_runtimeSettings == null)
@@ -569,6 +599,15 @@ namespace QBS.Core.Editor
 			_runtimeSettings.Rules = LogRules.All;
 			EditorUtility.SetDirty(_runtimeSettings);
 			AssetDatabase.SaveAssets();
+		}
+
+		private static class Palette
+		{
+			public static Color On => EditorGUIUtility.isProSkin ? new Color(0.24f, 0.56f, 0.38f) : new Color(0.36f, 0.72f, 0.48f);
+			public static Color Off => EditorGUIUtility.isProSkin ? new Color(0.30f, 0.30f, 0.30f) : new Color(0.80f, 0.80f, 0.80f);
+			public static Color Partial => new Color(0.90f, 0.68f, 0.28f);
+			public static Color Danger => new Color(0.74f, 0.30f, 0.27f);
+			public static Color Card => EditorGUIUtility.isProSkin ? new Color(0.20f, 0.20f, 0.20f) : new Color(0.87f, 0.87f, 0.87f);
 		}
 	}
 }
