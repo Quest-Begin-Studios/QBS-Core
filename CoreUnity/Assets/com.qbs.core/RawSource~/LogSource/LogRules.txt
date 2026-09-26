@@ -1,0 +1,263 @@
+using System;
+using System.Collections.Generic;
+
+namespace QBS.Core
+{
+	/// <summary>
+	///     One switch: every category named <see cref="Prefix" />, or named <see cref="Prefix" /> followed by a dot
+	///     and more, is on or off. <c>*</c> is the root and matches everything.
+	/// </summary>
+	[Serializable]
+	public struct LogRule
+	{
+		public string Prefix;
+		public bool Enabled;
+
+		public LogRule(string prefix, bool enabled)
+		{
+			Prefix = prefix;
+			Enabled = enabled;
+		}
+	}
+
+	/// <summary>
+	///     Decides which categories are on. The longest rule matching a category's name wins, and a prefix only
+	///     matches at a dot, so <c>Acme.Inventory Off</c> silences <c>Acme.Inventory.Save</c> but not
+	///     <c>Acme.InventoryUI</c>. Level filtering is separate and global: <see cref="Log.MinimumLevel" />.
+	/// </summary>
+	/// <remarks>
+	///     Every change updates every category at once, under one lock, so logging itself never takes the lock
+	///     and never re-resolves anything: it reads one flag.
+	/// </remarks>
+	public static class LogRules
+	{
+		public const string Root = "*";
+
+		internal static readonly object Gate = new();
+
+		//The root rule always exists and always sits first; nothing removes it.
+		private static readonly List<LogRule> Rules = new() { new LogRule(Root, true) };
+
+		public static IReadOnlyList<LogRule> All
+		{
+			get
+			{
+				lock (Gate)
+				{
+					return Rules.ToArray();
+				}
+			}
+		}
+
+		public static bool TryGetRule(string prefix, out bool enabled)
+		{
+			lock (Gate)
+			{
+				var index = IndexOf(prefix);
+				enabled = index >= 0 && Rules[index].Enabled;
+				return index >= 0;
+			}
+		}
+
+		/// <summary>The rule deciding a name: its own if it has one, else its longest matching prefix, else the root.</summary>
+		public static LogRule GetMatchingRule(string name)
+		{
+			lock (Gate)
+			{
+				return Rules[MatchIndex(name)];
+			}
+		}
+
+		public static void Set(string prefix, bool enabled)
+		{
+			ValidatePrefix(prefix);
+
+			lock (Gate)
+			{
+				Upsert(prefix, enabled);
+				LogCategory.ReapplyAll();
+			}
+		}
+
+		public static void Remove(string prefix)
+		{
+			if (prefix == Root)
+			{
+				throw new ArgumentException("The root rule can't be removed. Use Set(\"*\", ...) or Reset.", nameof(prefix));
+			}
+
+			lock (Gate)
+			{
+				var index = IndexOf(prefix);
+				if (index < 0)
+				{
+					return;
+				}
+
+				Rules.RemoveAt(index);
+				LogCategory.ReapplyAll();
+			}
+		}
+
+		/// <summary>
+		///     Replaces every rule, as when settings load. A list with no root rule gets one that enables everything.
+		/// </summary>
+		public static void Load(IEnumerable<LogRule> rules)
+		{
+			lock (Gate)
+			{
+				Rules.Clear();
+				Rules.Add(new LogRule(Root, true));
+
+				if (rules != null)
+				{
+					foreach (var rule in rules)
+					{
+						if (!string.IsNullOrWhiteSpace(rule.Prefix))
+						{
+							Upsert(rule.Prefix, rule.Enabled);
+						}
+					}
+				}
+
+				LogCategory.ReapplyAll();
+			}
+		}
+
+		/// <summary>Drops every rule and switches everything on or off.</summary>
+		public static void Reset(bool enabled)
+		{
+			lock (Gate)
+			{
+				Rules.Clear();
+				Rules.Add(new LogRule(Root, enabled));
+				LogCategory.ReapplyAll();
+			}
+		}
+
+		/// <summary>
+		///     Switches a category, or each member of a group, with a single update however many rules it writes.
+		///     A category that would inherit the state it is given has its own rule removed instead of rewritten,
+		///     so switching something off and back on leaves no rule behind.
+		/// </summary>
+		internal static void SetCategory(LogCategory category, bool enabled)
+		{
+			lock (Gate)
+			{
+				if (category.IsGroup)
+				{
+					foreach (var leaf in category.Leaves)
+					{
+						SetOwnRule(leaf.Name, enabled);
+					}
+				}
+				else
+				{
+					SetOwnRule(category.Name, enabled);
+				}
+
+				LogCategory.ReapplyAll();
+			}
+		}
+
+		internal static bool Resolve(string name)
+		{
+			return Rules[MatchIndex(name)].Enabled;
+		}
+
+		private static void SetOwnRule(string name, bool enabled)
+		{
+			var index = IndexOf(name);
+			if (index >= 0)
+			{
+				Rules.RemoveAt(index);
+			}
+
+			if (Resolve(name) != enabled)
+			{
+				Rules.Add(new LogRule(name, enabled));
+			}
+		}
+
+		private static void Upsert(string prefix, bool enabled)
+		{
+			var index = IndexOf(prefix);
+			if (index >= 0)
+			{
+				Rules[index] = new LogRule(prefix, enabled);
+			}
+			else
+			{
+				Rules.Add(new LogRule(prefix, enabled));
+			}
+		}
+
+		private static int IndexOf(string prefix)
+		{
+			for (var i = 0; i < Rules.Count; i++)
+			{
+				if (string.Equals(Rules[i].Prefix, prefix, StringComparison.Ordinal))
+				{
+					return i;
+				}
+			}
+
+			return -1;
+		}
+
+		private static int MatchIndex(string name)
+		{
+			var best = 0;
+			var bestLength = -1;
+
+			for (var i = 0; i < Rules.Count; i++)
+			{
+				var prefix = Rules[i].Prefix;
+				int length;
+
+				if (prefix == Root)
+				{
+					length = 0;
+				}
+				else if (Matches(name, prefix))
+				{
+					length = prefix.Length;
+				}
+				else
+				{
+					continue;
+				}
+
+				if (length > bestLength)
+				{
+					best = i;
+					bestLength = length;
+				}
+			}
+
+			return best;
+		}
+
+		//Lengths first: most rules are rejected there, or at the one character where a dot has to be, before any
+		//string comparison runs.
+		private static bool Matches(string name, string prefix)
+		{
+			if (name.Length == prefix.Length)
+			{
+				return string.Equals(name, prefix, StringComparison.Ordinal);
+			}
+
+			return name.Length > prefix.Length
+				&& name[prefix.Length] == '.'
+				&& name.StartsWith(prefix, StringComparison.Ordinal);
+		}
+
+		private static void ValidatePrefix(string prefix)
+		{
+			if (string.IsNullOrWhiteSpace(prefix))
+			{
+				throw new ArgumentException("A log rule needs a prefix.", nameof(prefix));
+			}
+		}
+	}
+}

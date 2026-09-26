@@ -14,15 +14,15 @@ namespace QBS.Core
 			if (settings != null)
 			{
 				Log.MinimumLevel = settings.MinimumLevel;
-				Log.EnabledChannels = settings.EnabledChannels;
+				LogRules.Load(settings.Rules);
 
-				Debug.Log($"[LogRuntimeInitializer] Log settings loaded: MinLevel={settings.MinimumLevel}, Channels={settings.EnabledChannels}");
+				Debug.Log($"[LogRuntimeInitializer] Log settings loaded: MinLevel={settings.MinimumLevel}, Rules={settings.Rules.Count}");
 			}
 			else
 			{
 				Debug.LogWarning($"[LogRuntimeInitializer] No RuntimeLogSettings found at Resources/{SettingsResourcePath}. Using default settings.");
 				Log.MinimumLevel = LogLevel.Trace;
-				Log.EnabledChannels = LogChannel.All;
+				LogRules.Reset(true);
 			}
 		}
 	}

@@ -1,30 +1,63 @@
-using System.Globalization;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
+using UnityEngine;
 
 namespace QBS.Core.Editor
 {
 	public class LogEditorUtility
 	{
 		/// <summary>
-		///     The channel mask saved from the last session, or every channel when nothing is saved yet.
-		///     EditorPrefs has no long, so the mask rides as a string rather than losing its top 32 bits.
+		///     The rules saved from the last session, or <c>null</c> when this machine has none saved yet.
 		/// </summary>
-		public static LogChannel ReadActiveChannels()
+		public static List<LogRule> ReadRules()
 		{
-			var stored = EditorPrefs.GetString(LogEditorConstants.ActiveChannels, string.Empty);
-			return long.TryParse(stored, NumberStyles.Integer, CultureInfo.InvariantCulture, out var mask)
-				? (LogChannel) mask
-				: LogChannel.All;
+			var stored = EditorPrefs.GetString(LogEditorConstants.Rules, string.Empty);
+			if (string.IsNullOrEmpty(stored))
+			{
+				return null;
+			}
+
+			return JsonUtility.FromJson<LogRuleList>(stored)?.Rules;
 		}
 
-		public static void WriteActiveChannels(LogChannel channels)
+		public static void WriteRules(IEnumerable<LogRule> rules)
 		{
-			EditorPrefs.SetString
-			(
-				LogEditorConstants.ActiveChannels,
-				((long) channels).ToString(CultureInfo.InvariantCulture)
-			);
+			var list = new LogRuleList { Rules = new List<LogRule>(rules) };
+			EditorPrefs.SetString(LogEditorConstants.Rules, JsonUtility.ToJson(list));
+		}
+
+		public static RuntimeLogSettings LoadRuntimeSettings()
+		{
+			return AssetDatabase.LoadAssetAtPath<RuntimeLogSettings>(LogEditorConstants.RuntimeSettingsPath);
+		}
+
+		public static RuntimeLogSettings LoadOrCreateRuntimeSettings()
+		{
+			var settings = LoadRuntimeSettings();
+			if (settings != null)
+			{
+				return settings;
+			}
+
+			var directory = Path.GetDirectoryName(LogEditorConstants.RuntimeSettingsPath);
+
+			// Calling Directory.CreateDirectory will do nothing if the path already exists.
+			if (directory != null)
+			{
+				Directory.CreateDirectory(directory);
+			}
+
+			settings = ScriptableObject.CreateInstance<RuntimeLogSettings>();
+			AssetDatabase.CreateAsset(settings, LogEditorConstants.RuntimeSettingsPath);
+			AssetDatabase.SaveAssets();
+			AssetDatabase.Refresh();
+
+			Debug.Log($"[QBS] Created RuntimeLogSettings at {LogEditorConstants.RuntimeSettingsPath}");
+
+			return settings;
 		}
 
 		public static bool AreLogsEnabled()
@@ -45,6 +78,13 @@ namespace QBS.Core.Editor
 		{
 			buildTarget = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
 			return PlayerSettings.GetScriptingDefineSymbols(buildTarget);
+		}
+
+		//JsonUtility serializes objects, not bare lists.
+		[Serializable]
+		public class LogRuleList
+		{
+			public List<LogRule> Rules;
 		}
 	}
 }

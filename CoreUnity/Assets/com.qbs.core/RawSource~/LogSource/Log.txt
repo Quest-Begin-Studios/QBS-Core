@@ -31,11 +31,10 @@ namespace QBS.Core
 		private static readonly List<ILogSink> _sinks = new() { DefaultSink };
 
 		public static LogLevel MinimumLevel { get; set; } = LogLevel.Trace;
-		public static LogChannel EnabledChannels { get; set; } = LogChannel.All;
 
 		/// <summary>
-		///     Adds a destination for every event that passes <see cref="MinimumLevel" /> and
-		///     <see cref="EnabledChannels" />. Adding the same instance twice does nothing.
+		///     Adds a destination for every event that passes <see cref="MinimumLevel" /> and whose channel is
+		///     enabled. Adding the same instance twice does nothing.
 		/// </summary>
 		public static void AddSink(ILogSink sink)
 		{
@@ -54,30 +53,35 @@ namespace QBS.Core
 
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void SetChannelEnabled(LogChannel channel, bool enabled)
+		public static void SetChannelEnabled(LogCategory channel, bool enabled)
 		{
-			if (enabled)
+			if (channel == null)
 			{
-				EnabledChannels |= channel;
+				return;
 			}
-			else
-			{
-				EnabledChannels &= ~channel;
-			}
+
+			//A group writes rules for its members, as clearing a combination cleared its bits.
+			LogRules.SetCategory(channel, enabled);
 		}
 
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static bool IsChannelEnabled(LogChannel channel)
+		public static bool IsChannelEnabled(LogCategory channel)
 		{
-			return (EnabledChannels & channel) != 0;
+			return channel != null && channel.Enabled;
+		}
+
+		/// <summary>Drops every channel rule and switches all channels on or off.</summary>
+		public static void SetAllChannelsEnabled(bool enabled)
+		{
+			LogRules.Reset(enabled);
 		}
 
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Trace(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Trace, message, tag, color, channel, context, null, member, file, line));
@@ -87,7 +91,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Debug(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Debug, message, tag, color, channel, context, null, member, file, line));
@@ -97,7 +101,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Info(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Info, message, tag, color, channel, context, null, member, file, line));
@@ -107,7 +111,7 @@ namespace QBS.Core
 		[Conditional("ENABLE_LOGS")]
 		[HideInCallstack]
 		public static void InfoSnipe(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Info, $"( -_•)▄︻デ══━一 {message}", tag, color, channel, context, null, member, file, line));
@@ -117,7 +121,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Warning(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Warning, message, tag, color, channel, context, null, member, file, line));
@@ -128,7 +132,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Error, message, tag, color, channel, context, null, member, file, line));
@@ -137,7 +141,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Error(string message, System.Exception exception, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Error, message, tag, color, channel, context, exception, member, file, line));
@@ -146,7 +150,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Fatal, message, tag, color, channel, context, null, member, file, line));
@@ -155,7 +159,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Fatal(string message, System.Exception exception, string tag = null, Color color = default,
-			LogChannel channel = default, Object context = null,
+			LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Fatal, message, tag, color, channel, context, exception, member, file, line));
@@ -168,7 +172,7 @@ namespace QBS.Core
 		[HideInCallstack]
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Exception(System.Exception exception, string message = null, string tag = null,
-			Color color = default, LogChannel channel = default, Object context = null,
+			Color color = default, LogCategory channel = null, Object context = null,
 			[CallerMemberName] string member = "", [CallerFilePath] string file = "", [CallerLineNumber] int line = 0)
 		{
 			Dispatch(new LogEvent(LogLevel.Error, message ?? exception?.Message, tag, color, channel, context, exception, member, file, line));
@@ -183,7 +187,7 @@ namespace QBS.Core
 				return;
 			}
 
-			if (!IsChannelEnabled(logEvent.Channel) && logEvent.Channel != default)
+			if (logEvent.Channel != null && !logEvent.Channel.Enabled)
 			{
 				return;
 			}
@@ -204,7 +208,7 @@ namespace QBS.Core
 		{
 			if (!condition)
 			{
-				Dispatch(new LogEvent(LogLevel.Error, message, AssertionFailedTag, Color.red, default, context, null, member, file, line));
+				Dispatch(new LogEvent(LogLevel.Error, message, AssertionFailedTag, Color.red, null, context, null, member, file, line));
 			}
 		}
 
@@ -214,7 +218,7 @@ namespace QBS.Core
 		{
 			if (!condition)
 			{
-				Dispatch(new LogEvent(LogLevel.Fatal, $"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, default, context, null, member, file, line));
+				Dispatch(new LogEvent(LogLevel.Fatal, $"[ASSERTION FAILED] {message}", AssertionFailedTag, Color.red, null, context, null, member, file, line));
 				throw new System.Exception($"Assertion failed: {message}");
 			}
 		}

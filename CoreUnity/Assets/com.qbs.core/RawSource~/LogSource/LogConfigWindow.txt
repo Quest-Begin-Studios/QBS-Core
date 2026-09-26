@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -20,8 +19,12 @@ namespace QBS.Core.Editor
 		private GUIStyle _boxStyle;
 		private Vector2 _channelScrollPosition;
 		private Vector2 _windowScrollPosition;
-		private List<LogChannel> _individualChannels;
-		private List<(LogChannel channel, string name)> _compositeChannels;
+		private List<LogCategory> _individualChannels;
+		private List<LogCategory> _compositeChannels;
+		private HashSet<LogCategory> _editorOnlyChannels;
+		private List<string> _problems;
+		private string _search = "";
+		private string _newRulePrefix = "";
 
 		public static void ShowWindow()
 		{
@@ -33,19 +36,22 @@ namespace QBS.Core.Editor
 		private void OnEnable()
 		{
 			// Load or create RuntimeLogSettings
-			_runtimeSettings = LoadOrCreateRuntimeSettings();
+			_runtimeSettings = LogEditorUtility.LoadOrCreateRuntimeSettings();
 
-			// Activate all log channels in case a preference isn't set.
-			Log.EnabledChannels = LogEditorUtility.ReadActiveChannels();
+			// Nothing saved yet leaves the rules as they are, which is everything on.
+			var savedRules = LogEditorUtility.ReadRules();
+			if (savedRules != null)
+			{
+				LogRules.Load(savedRules);
+			}
+
 			_minimumLevel = (LogLevel)EditorPrefs.GetInt(LogEditorConstants.MinimumLevel, 0);
 			_logsEnabled = LogEditorUtility.AreLogsEnabled();
 
 			// Sync RuntimeLogSettings with current EditorPrefs
 			SyncRuntimeSettingsFromEditorPrefs();
 
-			var logChannelValues = Enum.GetValues(typeof(LogChannel));
-			_individualChannels = GetIndividualChannels(logChannelValues);
-			_compositeChannels = GetCompositeChannels(logChannelValues);
+			RefreshChannels();
 		}
 
 		private void InitializeStyles()
@@ -75,6 +81,8 @@ namespace QBS.Core.Editor
 		{
 			InitializeStyles();
 
+			_windowScrollPosition = EditorGUILayout.BeginScrollView(_windowScrollPosition);
+
 			EditorGUILayout.Space(15);
 			EditorGUILayout.LabelField("QBS Log Configuration", _headerStyle);
 			DrawSeparator();
@@ -85,7 +93,11 @@ namespace QBS.Core.Editor
 			DrawMinimumLevelSection();
 			EditorGUILayout.Space(15);
 			DrawChannelsSection();
+			EditorGUILayout.Space(15);
+			DrawValidationSection();
 			EditorGUILayout.Space(10);
+
+			EditorGUILayout.EndScrollView();
 		}
 
 		private void DrawSeparator()
@@ -190,7 +202,9 @@ namespace QBS.Core.Editor
 
 			EditorGUILayout.HelpBox
 			(
-				"Enable or disable specific log channels. Disabled channels will not output logs.",
+				"Enable or disable specific log channels. Disabled channels will not output logs. A dotted name "
+				+ "follows the longest rule that matches it, so a rule for 'Acme' switches every 'Acme.*' channel "
+				+ "that has no rule of its own.",
 				MessageType.Info
 			);
 
@@ -206,6 +220,9 @@ namespace QBS.Core.Editor
 			}
 			EditorGUILayout.EndHorizontal();
 
+			EditorGUILayout.Space(5);
+			_search = EditorGUILayout.TextField("Search", _search);
+
 			EditorGUILayout.Space(8);
 			EditorGUILayout.LabelField("Individual Channels:", EditorStyles.boldLabel);
 			EditorGUILayout.Space(3);
@@ -217,12 +234,52 @@ namespace QBS.Core.Editor
 			DrawCompositeChannels();
 
 			EditorGUILayout.Space(8);
+			EditorGUILayout.LabelField("Rules:", EditorStyles.boldLabel);
+			EditorGUILayout.Space(3);
+			DrawRules();
+
+			EditorGUILayout.Space(8);
 			DrawSeparator();
 			EditorGUILayout.Space(5);
 			EditorGUILayout.LabelField("Active Channels:", EditorStyles.boldLabel);
 			EditorGUILayout.Space(3);
 			DrawActiveChannelsList();
 			EditorGUILayout.Space(5);
+
+			EditorGUILayout.EndVertical();
+		}
+
+		private void DrawValidationSection()
+		{
+			EditorGUILayout.BeginVertical(_boxStyle);
+
+			EditorGUILayout.LabelField("🔎 Validation", _sectionStyle);
+			EditorGUILayout.Space(3);
+
+			EditorGUILayout.HelpBox
+			(
+				"Finds every [LogCategories] class and checks what it declares. Runs when this window opens.",
+				MessageType.Info
+			);
+
+			EditorGUILayout.Space(5);
+			if (GUILayout.Button("Validate", GUILayout.Height(25)))
+			{
+				RefreshChannels();
+			}
+
+			EditorGUILayout.Space(5);
+			if (_problems.Count == 0)
+			{
+				EditorGUILayout.HelpBox("No problems found.", MessageType.None);
+			}
+			else
+			{
+				foreach (var problem in _problems)
+				{
+					EditorGUILayout.HelpBox(problem, MessageType.Warning);
+				}
+			}
 
 			EditorGUILayout.EndVertical();
 		}
@@ -278,14 +335,15 @@ namespace QBS.Core.Editor
 			Debug.Log($"[QBS] Minimum log level set to: {level}");
 		}
 
-		private void WriteLogChannels(LogChannel channels)
+		/// <summary>Saves the live rules to this machine's settings and to the shipped asset.</summary>
+		private void WriteRules()
 		{
-			Log.EnabledChannels = channels;
-			LogEditorUtility.WriteActiveChannels(channels);
+			var rules = LogRules.All;
+			LogEditorUtility.WriteRules(rules);
 
 			if (_runtimeSettings != null)
 			{
-				_runtimeSettings.EnabledChannels = channels;
+				_runtimeSettings.Rules = rules;
 				EditorUtility.SetDirty(_runtimeSettings);
 				AssetDatabase.SaveAssets();
 			}
@@ -293,7 +351,19 @@ namespace QBS.Core.Editor
 
 		private void SetStateOfAllChannels(bool enabled)
 		{
-			WriteLogChannels(enabled ? LogChannel.All : LogChannel.None);
+			Log.SetAllChannelsEnabled(enabled);
+			WriteRules();
+		}
+
+		private void RefreshChannels()
+		{
+			var report = LogCategoryValidator.Run();
+			_problems = report.Problems;
+			_editorOnlyChannels = report.EditorOnly;
+
+			var all = LogCategory.All;
+			_individualChannels = all.Where(c => !c.IsGroup).OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
+			_compositeChannels = all.Where(c => c.IsGroup).OrderBy(c => c.Name, StringComparer.Ordinal).ToList();
 		}
 
 		private void DrawActiveChannelsList()
@@ -360,7 +430,7 @@ namespace QBS.Core.Editor
 						var badgeBg = GUI.backgroundColor;
 						GUI.backgroundColor = new Color(0.3f, 0.7f, 0.5f, 0.8f);
 
-						GUILayout.Label(channel.ToString(), badgeStyle);
+						GUILayout.Label(channel.Name, badgeStyle);
 
 						GUI.backgroundColor = badgeBg;
 						channelIndex++;
@@ -394,76 +464,34 @@ namespace QBS.Core.Editor
 			}
 		}
 
-		private List<LogChannel> GetIndividualChannels(Array values)
-		{
-			return values
-				.Cast<LogChannel>()
-				.Where(c => c != LogChannel.None && c != LogChannel.All && IsPowerOfTwo((long)c))
-				.OrderBy(c => c.ToString())
-				.ToList();
-		}
-
-		private List<(LogChannel channel, string name)> GetCompositeChannels(Array values)
-		{
-			return values
-				.Cast<LogChannel>()
-				.Where(c => c != LogChannel.None && c != LogChannel.All && HasMultipleBitsSet((long)c))
-				.OrderBy(c => c.ToString())
-				.Select(c => (c, c.ToString()))
-				.ToList();
-		}
-
-		private bool IsPowerOfTwo(long value)
-		{
-			return value != 0 && (value & value - 1) == 0;
-		}
-
-		private bool HasMultipleBitsSet(long value)
-		{
-			if (value == 0)
-			{
-				return false;
-			}
-
-			var count = 0;
-			while (value != 0)
-			{
-				value &= value - 1;
-				count++;
-				if (count > 1)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-
 		private void DrawIndividualChannels()
 		{
-			const int toggleWidth = 140;
+			const int toggleWidth = 180;
 			const int padding = 20;
 			var availableWidth = position.width - padding;
 			var columns = Mathf.Max(1, (int)(availableWidth / toggleWidth));
 
+			var visibleChannels = _individualChannels
+				.Where(c => _search.Length == 0 || c.Name.IndexOf(_search, StringComparison.OrdinalIgnoreCase) >= 0)
+				.ToList();
+
 			var channelIndex = 0;
 
-			while (channelIndex < _individualChannels.Count)
+			while (channelIndex < visibleChannels.Count)
 			{
 				EditorGUILayout.BeginHorizontal();
 
-				for (var i = 0; i < columns && channelIndex < _individualChannels.Count; i++)
+				for (var i = 0; i < columns && channelIndex < visibleChannels.Count; i++)
 				{
-					var channel = _individualChannels[channelIndex];
+					var channel = visibleChannels[channelIndex];
 					var isEnabled = Log.IsChannelEnabled(channel);
+					var label = new GUIContent(GetDisplayName(channel), GetRuleTooltip(channel));
 
-					var newEnabled = EditorGUILayout.ToggleLeft(channel.ToString(), isEnabled, GUILayout.Width(toggleWidth));
+					var newEnabled = EditorGUILayout.ToggleLeft(label, isEnabled, GUILayout.Width(toggleWidth));
 					if (newEnabled != isEnabled)
 					{
-						var updatedChannels = newEnabled ?
-							Log.EnabledChannels | channel :
-							Log.EnabledChannels & ~channel;
-						
-						WriteLogChannels(updatedChannels);
+						Log.SetChannelEnabled(channel, newEnabled);
+						WriteRules();
 					}
 
 					channelIndex++;
@@ -477,7 +505,7 @@ namespace QBS.Core.Editor
 		{
 			EditorGUILayout.BeginHorizontal();
 
-			foreach (var (channel, enumName) in _compositeChannels)
+			foreach (var group in _compositeChannels)
 			{
 				var buttonStyle = new GUIStyle(GUI.skin.button)
 				{
@@ -485,17 +513,15 @@ namespace QBS.Core.Editor
 					padding = new RectOffset(10, 10, 6, 6),
 				};
 
-				var isFullyEnabled = (Log.EnabledChannels & channel) == channel;
+				var isFullyEnabled = group.Members.All(Log.IsChannelEnabled);
 				var originalBg = GUI.backgroundColor;
 				GUI.backgroundColor = isFullyEnabled ? new Color(0.3f, 0.7f, 0.5f) : new Color(0.5f, 0.5f, 0.5f);
 
-				if (GUILayout.Button(enumName, buttonStyle, GUILayout.Height(28)))
+				var label = new GUIContent(group.Name, string.Join(", ", group.Members.Select(m => m.Name)));
+				if (GUILayout.Button(label, buttonStyle, GUILayout.Height(28)))
 				{
-					var updatedChannels = isFullyEnabled ? 
-						Log.EnabledChannels & ~channel : 
-						Log.EnabledChannels | channel;
-					
-					WriteLogChannels(updatedChannels);
+					Log.SetChannelEnabled(group, !isFullyEnabled);
+					WriteRules();
 				}
 
 				GUI.backgroundColor = originalBg;
@@ -504,9 +530,83 @@ namespace QBS.Core.Editor
 			EditorGUILayout.EndHorizontal();
 		}
 
-		private List<LogChannel> GetActiveChannels()
+		private void DrawRules()
 		{
-			var activeChannels = new List<LogChannel>();
+			//A copy: removing a rule below must not disturb the loop drawing them.
+			foreach (var rule in LogRules.All)
+			{
+				var isRoot = rule.Prefix == LogRules.Root;
+
+				EditorGUILayout.BeginHorizontal();
+				EditorGUILayout.LabelField(isRoot ? "* (everything)" : rule.Prefix);
+
+				var newEnabled = EditorGUILayout.ToggleLeft(rule.Enabled ? "On" : "Off", rule.Enabled, GUILayout.Width(50));
+				if (newEnabled != rule.Enabled)
+				{
+					LogRules.Set(rule.Prefix, newEnabled);
+					WriteRules();
+				}
+
+				EditorGUI.BeginDisabledGroup(isRoot);
+				if (GUILayout.Button("✗", GUILayout.Width(24)))
+				{
+					LogRules.Remove(rule.Prefix);
+					WriteRules();
+				}
+				EditorGUI.EndDisabledGroup();
+
+				EditorGUILayout.EndHorizontal();
+			}
+
+			EditorGUILayout.Space(3);
+			EditorGUILayout.BeginHorizontal();
+			_newRulePrefix = EditorGUILayout.TextField(_newRulePrefix);
+
+			EditorGUI.BeginDisabledGroup(string.IsNullOrWhiteSpace(_newRulePrefix));
+			if (GUILayout.Button("Add On", GUILayout.Width(60)))
+			{
+				AddRule(true);
+			}
+			if (GUILayout.Button("Add Off", GUILayout.Width(60)))
+			{
+				AddRule(false);
+			}
+			EditorGUI.EndDisabledGroup();
+
+			EditorGUILayout.EndHorizontal();
+		}
+
+		private void AddRule(bool enabled)
+		{
+			LogRules.Set(_newRulePrefix.Trim(), enabled);
+			WriteRules();
+			_newRulePrefix = "";
+			GUI.FocusControl(null);
+		}
+
+		private string GetDisplayName(LogCategory channel)
+		{
+			return _editorOnlyChannels.Contains(channel) ? channel.Name + " (editor)" : channel.Name;
+		}
+
+		private static string GetRuleTooltip(LogCategory channel)
+		{
+			var rule = LogRules.GetMatchingRule(channel.Name);
+			var state = rule.Enabled ? "on" : "off";
+
+			if (rule.Prefix == channel.Name)
+			{
+				return $"{channel.Name}: {state} by its own rule";
+			}
+
+			return rule.Prefix == LogRules.Root
+				? $"{channel.Name}: {state}, following the root rule"
+				: $"{channel.Name}: {state}, following '{rule.Prefix}'";
+		}
+
+		private List<LogCategory> GetActiveChannels()
+		{
+			var activeChannels = new List<LogCategory>();
 
 			for (var i = 0; i < _individualChannels.Count; i++)
 			{
@@ -520,32 +620,6 @@ namespace QBS.Core.Editor
 			return activeChannels;
 		}
 
-		private RuntimeLogSettings LoadOrCreateRuntimeSettings()
-		{
-			var settings = AssetDatabase.LoadAssetAtPath<RuntimeLogSettings>(LogEditorConstants.RuntimeSettingsPath);
-			if (settings != null)
-			{
-				return settings;
-			}
-			
-			var directory = Path.GetDirectoryName(LogEditorConstants.RuntimeSettingsPath);
-			
-			// Calling Directory.CreateDirectory will do nothing if the path already exists.
-			if (directory != null)
-			{
-				Directory.CreateDirectory(directory);
-			}
-
-			settings = CreateInstance<RuntimeLogSettings>();
-			AssetDatabase.CreateAsset(settings, LogEditorConstants.RuntimeSettingsPath);
-			AssetDatabase.SaveAssets();
-			AssetDatabase.Refresh();
-
-			Debug.Log($"[LogConfigWindow] Created RuntimeLogSettings at {LogEditorConstants.RuntimeSettingsPath}");
-
-			return settings;
-		}
-
 		private void SyncRuntimeSettingsFromEditorPrefs()
 		{
 			if (_runtimeSettings == null)
@@ -554,7 +628,7 @@ namespace QBS.Core.Editor
 			}
 
 			_runtimeSettings.MinimumLevel = _minimumLevel;
-			_runtimeSettings.EnabledChannels = Log.EnabledChannels;
+			_runtimeSettings.Rules = LogRules.All;
 			EditorUtility.SetDirty(_runtimeSettings);
 			AssetDatabase.SaveAssets();
 		}

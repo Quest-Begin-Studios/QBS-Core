@@ -4,10 +4,11 @@ namespace QBS.Core.Editor
 	{
 		public const string MinimumLevel = "QBS_Log_MinimumLevel";
 		public const string LogsDisabledWarningShown = "QBS_Logs_Disabled_Warning_Shown";
-		//Renamed alongside the move to a 64-bit mask: the old key holds an int and EditorPrefs is typed,
-		//so a fresh key is what lets the string read fall back cleanly instead of fighting the old value.
-		public const string ActiveChannels = "QBS_Log_ActiveChannelMask";
+		//The rule list, as JSON. The channel mask it replaces sat under QBS_Log_ActiveChannelMask; bits mean
+		//nothing once channels are names, so that key is simply never read again.
+		public const string Rules = "QBS_Log_Rules";
 		public const string LogsEnabledSymbol = "ENABLE_LOGS";
-		public const string RuntimeSettingsPath = "Assets/Plugins/Log/Runtime/RuntimeLogSettings.asset";
+		//Under Resources, where LogRuntimeInitializer loads it from.
+		public const string RuntimeSettingsPath = "Assets/Resources/RuntimeLogSettings.asset";
 	}
 }

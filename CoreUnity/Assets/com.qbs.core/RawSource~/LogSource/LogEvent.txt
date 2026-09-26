@@ -12,7 +12,7 @@ namespace QBS.Core
 	public readonly struct LogEvent
 	{
 		public readonly LogLevel Level;
-		public readonly LogChannel Channel;
+		public readonly LogCategory Channel;
 		public readonly string Tag;
 		public readonly string Message;
 		public readonly Exception Exception;
@@ -24,7 +24,7 @@ namespace QBS.Core
 		public readonly string File;
 		public readonly int Line;
 
-		public LogEvent(LogLevel level, string message, string tag, Color color, LogChannel channel,
+		public LogEvent(LogLevel level, string message, string tag, Color color, LogCategory channel,
 			Object context, Exception exception, string member, string file, int line)
 		{
 			Level = level;

@@ -8,19 +8,19 @@ namespace QBS.Core
 {
 	public static partial class Log
 	{
-		public static LogBuilder WithChannel(LogChannel channel) => new LogBuilder { Channel = channel };
+		public static LogBuilder WithChannel(LogCategory channel) => new LogBuilder { Channel = channel };
 		public static LogBuilder WithTag(string tag) => new LogBuilder { Tag = tag };
 		public static LogBuilder WithColor(Color color) => new LogBuilder { Color = color };
 		public static LogBuilder WithContext(Object context) => new LogBuilder { Context = context };
 
 		public class LogBuilder
 		{
-			internal LogChannel Channel { get; set; }
+			internal LogCategory Channel { get; set; }
 			internal string Tag { get; set; }
 			internal Color Color { get; set; }
 			internal Object Context { get; set; }
 
-			public LogBuilder WithChannel(LogChannel channel)
+			public LogBuilder WithChannel(LogCategory channel)
 			{
 				Channel = channel;
 				return this;
