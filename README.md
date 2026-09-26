@@ -15,9 +15,11 @@ QBS-Core provides essential development tools for building Unity projects. It in
 - **Enum Utility Source Generators**: Auto-generate `HasFlagFast()`, `ToStringFast()`, and a `Values` array for any enum at compile time via `[EnumUtilities]`
 
 ### 📝 Logging System
-- **Log Source Compiler**: Editor tool for managing logging channels and compiling log sources
-- **Default Log Channels**: Network, AI, Physics, Audio, UI, Gameplay, Animation, Input, Save/Load, Dialogue, Inventory, Quest, Combat
-- **DLL Compilation**: Compile log sources into runtime or editor assemblies
+- **Prebuilt Log DLLs**: `Log.dll` and `Log-Editor.dll` ship with the package, so there is nothing to generate per project
+- **Built-in Channels**: Network, AI, Physics, UI, Input, SaveLoad, Loading, Gameplay, Audio, Rendering, plus the groups Core, Presentation and Simulation
+- **Your Own Channels**: declare them in code as `LogCategory` fields of a `[LogCategories]` class, named after your namespace (`Acme.Inventory.Save`) so they never collide with anyone else's
+- **Groups**: `LogCategory.Group(...)` combines channels from anywhere; log to a group like a channel, and it is on while any member is
+- **Log Configuration Window**: switch channels and groups on or off, set the minimum level, and see problems with declared channels
 
 ### 🔨 DLL Generation
 - **Roslyn-based Compilation**: Compile C# source files into DLLs at runtime
@@ -49,7 +51,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
    ```json
    {
      "dependencies": {
-       "com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
+       "com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v2.0.0"
      }
    }
    ```
@@ -59,7 +61,7 @@ QBS-Core provides essential development tools for building Unity projects. It in
 
 To install a specific version, append the version tag to the Git URL:
 ```json
-"com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v1.1.1"
+"com.qbs.core": "https://github.com/Quest-Begin-Studios/QBS-Core.git?path=/CoreUnity/Assets/com.qbs.core#v2.0.0"
 ```
 
 ## Requirements
@@ -71,7 +73,7 @@ To install a specific version, append the version tag to the Git URL:
 
 ### Access Editor Tools
 
-- **Log Source Compiler**: `Tools > QBS > Logs > Log Source Compiler`
+- **Log Configuration**: `Tools > Logs > Configure Logging`
 - **Enum Generator**: `Tools > QBS > Enum Generator`
 
 ### Generate Enums
@@ -81,12 +83,31 @@ To install a specific version, append the version tag to the Git URL:
 3. Add enum keys (and flag combinations if using a Flags enum)
 4. Click "Generate Enum" — source is displayed and can be copied to clipboard
 
-### Compile Log Sources
+### Log
 
-1. Open Log Source Compiler (`Tools > QBS > Logs > Log Source Compiler`)
-2. Add or remove LogChannel enum keys in the Enum Generation section
-3. Click "Generate Enum" — reads sources from `RawSource~` and generates the enum + string utilities
-4. Click "Generate DLL" — compiles into runtime and editor DLLs under `Assets/Plugins/Log/`
+1. Log with a built-in channel, or with none:
+   ```csharp
+   using QBS.Core;
+
+   Log.Info("Connected", channel: LogChannel.Network);   // [Info] [Network] Connected
+   Log.Warning("Low memory");
+   ```
+2. Declare your own channels and groups once, as `static readonly` fields of a `[LogCategories]` class. Declare groups after their members:
+   ```csharp
+   [LogCategories]
+   public static class InventoryLog
+   {
+       public static readonly LogCategory Save = LogCategory.Get("Acme.Inventory.Save");
+       public static readonly LogCategory Crafting = LogCategory.Get("Acme.Inventory.Crafting");
+       public static readonly LogCategory Gear = LogCategory.Group("Acme.Gear", Save, LogChannel.Gameplay);
+   }
+
+   Log.Info("Equipped", channel: InventoryLog.Gear);     // on while Save or Gameplay is
+   ```
+3. Open `Tools > Logs > Configure Logging` to switch channels and groups on or off and set the minimum level. The window lists every declared channel, and it reports channels declared outside a `[LogCategories]` class or named under a built-in channel's.
+4. Turn the `ENABLE_LOGS` define on or off from the same window. Without it, `Trace` to `Warning` calls are compiled out; `Error` and `Fatal` always log.
+
+Upgrading from 1.x: delete the project's generated `Assets/Plugins/Log/` and move its own channels into a `[LogCategories]` class. See the [changelog](CoreUnity/Assets/com.qbs.core/CHANGELOG.md) for everything that changed.
 
 ### Use Enum Utility Source Generators
 
@@ -110,9 +131,10 @@ QBS-Core/
             │   ├── EnumGeneration/
             │   └── Log/
             ├── Plugins/               # Precompiled DLLs
+            │   ├── Log/               # Prebuilt Log.dll and Log-Editor.dll
             │   ├── Roslyn/Editor/     # Roslyn compiler DLLs (editor-only)
             │   └── SourceGen/         # Roslyn source generator DLLs
-            ├── RawSource~/            # Raw source files (excluded from builds)
+            ├── RawSource~/            # Log sources the Log DLLs are built from (excluded from builds)
             ├── Documentation~/        # Documentation (excluded from builds)
             ├── package.json           # Package manifest
             ├── README.md              # Package documentation
